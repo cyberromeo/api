@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless API Endpoint for Class Schedule
- * GET /api/class-schedule  -> Returns active class schedule for E-Paper / Clients
- * POST /api/class-schedule -> Pushes/updates class schedule (Used by Hermes Agent / Automation)
+ * GET /api/class-schedule  -> Returns class schedule (Only subject and date)
+ * POST /api/class-schedule -> Pushes/updates class schedule (Used by Hermes Agent)
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -32,23 +32,14 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
-      const date = body.date || new Date().toISOString().split('T')[0];
-      const classes = Array.isArray(body.classes) ? body.classes : (body.schedule || []);
-      const notes = body.notes || "";
+      const classes = Array.isArray(body.classes) ? body.classes : (body.data || body.schedule || []);
 
       const payload = {
-        date,
         total_classes: classes.length,
-        classes: classes.map((c, i) => ({
-          id: c.id || `cls_${i + 1}`,
-          subject: c.subject || c.title || "Class",
-          time: c.time || c.startTime || "TBD",
-          room: c.room || c.location || "N/A",
-          topic: c.topic || c.description || "",
-          instructor: c.instructor || ""
+        classes: classes.map((c) => ({
+          subject: c.subject || c.name || c.title || "Class",
+          date: c.date || c.time || new Date().toISOString().split('T')[0]
         })),
-        notes,
-        updated_by: body.source || "Hermes Agent",
         updated_at: new Date().toISOString()
       };
 
@@ -77,13 +68,11 @@ export default async function handler(req, res) {
   // --- GET /api/class-schedule (Fetched by E-Paper Screen / Clients) ---
   try {
     let payloadData = {
-      date: new Date().toISOString().split('T')[0],
       total_classes: 2,
       classes: [
-        { id: "cls_1", subject: "Pathology Lecture", time: "09:00 AM - 10:30 AM", room: "Hall A", topic: "Cell Injury & Apoptosis" },
-        { id: "cls_2", subject: "Pharmacology Practical", time: "11:00 AM - 01:00 PM", room: "Lab 2", topic: "Autonomic Nervous System" }
+        { subject: "Pathology Lecture", date: "2026-07-26 09:00 AM" },
+        { subject: "Pharmacology Practical", date: "2026-07-26 11:00 AM" }
       ],
-      notes: "Hermes Agent sync pending",
       updated_at: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -95,10 +84,11 @@ export default async function handler(req, res) {
         const docData = docSnap.data();
         const payload = docData.payload || {};
         payloadData = {
-          date: payload.date || new Date().toISOString().split('T')[0],
           total_classes: payload.total_classes ?? (payload.classes || []).length,
-          classes: payload.classes || [],
-          notes: payload.notes || "",
+          classes: (payload.classes || []).map(c => ({
+            subject: c.subject,
+            date: c.date
+          })),
           updated_at: docData.timestamp?.toDate 
             ? docData.timestamp.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
             : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })

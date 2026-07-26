@@ -61,24 +61,23 @@ export const EPaperHub = ({ feeds, onToast }) => {
     daysSinceLastWorkout: 245
   };
 
-  // Extract Class Schedule feed values
+  // Extract Class Schedule feed values (Subject & Date only)
   const classFeed = feeds ? feeds.find(f => f.apiName === 'CLASS_SCHEDULE') : null;
   const classPayload = classFeed?.payload || {
-    date: new Date().toISOString().split('T')[0],
-    total_classes: 3,
+    total_classes: 2,
     classes: [
-      { id: "cls_1", subject: "Pathology Lecture", time: "09:00 AM - 10:30 AM", room: "Hall A", topic: "Cell Injury" },
-      { id: "cls_2", subject: "Pharmacology Practical", time: "11:00 AM - 01:00 PM", room: "Lab 2", topic: "Autonomic NS" }
+      { subject: "Pathology Lecture", date: "2026-07-26 09:00 AM" },
+      { subject: "Pharmacology Practical", date: "2026-07-26 11:00 AM" }
     ]
   };
 
-  // Extract Exams feed values
+  // Extract Exams feed values (Subject & Date only)
   const examsFeed = feeds ? feeds.find(f => f.apiName === 'EXAMS_SCHEDULE') : null;
   const examsPayload = examsFeed?.payload || {
     total_upcoming: 2,
     exams: [
-      { id: "ex_1", name: "FMGE July 2026 Grand Test", date: "2026-08-15", days_remaining: 20, venue: "Exam Hall 1" },
-      { id: "ex_2", name: "Pathology Midterm Exam", date: "2026-08-01", days_remaining: 6, venue: "Hall B" }
+      { subject: "FMGE July Grand Test", date: "2026-08-15" },
+      { subject: "Pathology Midterm Exam", date: "2026-08-01" }
     ]
   };
 
@@ -116,7 +115,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
             <Send size={20} style={{ color: 'var(--primary)' }} />
             <div>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Hermes Agent Push API Links</h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Use these POST endpoints in your Hermes Agent script to update Class Schedules & Exams</p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>POST endpoints to update Class Schedules & Exams (subject & date only)</p>
             </div>
           </div>
 
@@ -136,10 +135,9 @@ export const EPaperHub = ({ feeds, onToast }) => {
               <strong>Body Payload Example:</strong>
               <pre style={{ background: '#0b0f19', padding: '8px', borderRadius: '6px', fontSize: '0.68rem', marginTop: '4px', overflowX: 'auto' }}>{`{
   "source": "Hermes Agent",
-  "date": "2026-07-26",
   "classes": [
-    { "subject": "Pathology", "time": "09:00 AM - 10:30 AM", "room": "Hall A", "topic": "Cell Injury" },
-    { "subject": "Pharmacology", "time": "11:00 AM - 01:00 PM", "room": "Lab 2", "topic": "Autonomic NS" }
+    { "subject": "Pathology Lecture", "date": "2026-07-26 09:00 AM" },
+    { "subject": "Pharmacology Practical", "date": "2026-07-26 11:00 AM" }
   ]
 }`}</pre>
             </div>
@@ -162,7 +160,8 @@ export const EPaperHub = ({ feeds, onToast }) => {
               <pre style={{ background: '#0b0f19', padding: '8px', borderRadius: '6px', fontSize: '0.68rem', marginTop: '4px', overflowX: 'auto' }}>{`{
   "source": "Hermes Agent",
   "exams": [
-    { "name": "FMGE July GT", "subject": "All", "date": "2026-08-15", "venue": "Hall 1", "total_marks": 300 }
+    { "subject": "FMGE July Grand Test", "date": "2026-08-15" },
+    { "subject": "Pathology Midterm Exam", "date": "2026-08-01" }
   ]
 }`}</pre>
             </div>
@@ -191,7 +190,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
             boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)',
             border: '4px solid #374151'
           }}>
-            {/* Widget 1: Class Schedule (Hermes Agent Synced) */}
+            {/* Widget 1: Class Schedule (Subject & Date only) */}
             <div style={{ borderBottom: '2px solid #111827', paddingBottom: '6px', marginBottom: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '800', fontSize: '0.8rem' }}>
@@ -203,26 +202,26 @@ export const EPaperHub = ({ feeds, onToast }) => {
               </div>
 
               <div style={{ background: '#ffffff', borderRadius: '4px', border: '1px solid #9ca3af', padding: '6px' }}>
-                {(classPayload.classes || []).slice(0, 2).map((cls, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', padding: '2px 0', borderBottom: i === 0 ? '1px solid #e5e7eb' : 'none' }}>
-                    <span style={{ fontWeight: 700 }}>• {cls.subject} ({cls.room})</span>
-                    <span style={{ color: '#4b5563', fontWeight: 600 }}>{cls.time}</span>
+                {(classPayload.classes || []).map((cls, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '2px 0', borderBottom: i < (classPayload.classes || []).length - 1 ? '1px solid #e5e7eb' : 'none' }}>
+                    <span style={{ fontWeight: 700 }}>• {cls.subject}</span>
+                    <span style={{ color: '#4b5563', fontWeight: 600 }}>{cls.date}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Widget 2: Upcoming Exams */}
+            {/* Widget 2: Upcoming Exams (Subject & Date only) */}
             <div style={{ borderBottom: '2px solid #111827', paddingBottom: '6px', marginBottom: '6px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '800', fontSize: '0.8rem', marginBottom: '4px' }}>
                 <GraduationCap size={14} /> UPCOMING EXAMS ({examsPayload.total_upcoming || 0})
               </div>
 
               <div style={{ background: '#ffffff', borderRadius: '4px', border: '1px solid #9ca3af', padding: '6px' }}>
-                {(examsPayload.exams || []).slice(0, 2).map((ex, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', padding: '2px 0' }}>
-                    <span style={{ fontWeight: 700 }}>🏆 {ex.name}</span>
-                    <span style={{ color: '#dc2626', fontWeight: 800 }}>{ex.days_remaining != null ? `${ex.days_remaining} days left` : ex.date}</span>
+                {(examsPayload.exams || []).map((ex, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '2px 0', borderBottom: i < (examsPayload.exams || []).length - 1 ? '1px solid #e5e7eb' : 'none' }}>
+                    <span style={{ fontWeight: 700 }}>🏆 {ex.subject}</span>
+                    <span style={{ color: '#dc2626', fontWeight: 800 }}>{ex.date}</span>
                   </div>
                 ))}
               </div>

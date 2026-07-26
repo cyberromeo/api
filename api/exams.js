@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless API Endpoint for Exams Schedule
- * GET /api/exams  -> Returns upcoming exams for E-Paper / Clients
- * POST /api/exams -> Pushes/updates exams schedule (Used by Hermes Agent / Automation)
+ * GET /api/exams  -> Returns upcoming exams (Only subject and date)
+ * POST /api/exams -> Pushes/updates exams schedule (Used by Hermes Agent)
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -36,26 +36,10 @@ export default async function handler(req, res) {
 
       const payload = {
         total_upcoming: examsList.length,
-        exams: examsList.map((ex, i) => {
-          const examDate = new Date(ex.date);
-          const now = new Date();
-          let daysRemaining = null;
-          if (!isNaN(examDate.getTime())) {
-            daysRemaining = Math.max(0, Math.ceil((examDate.getTime() - now.getTime()) / (1000 * 3600 * 24)));
-          }
-
-          return {
-            id: ex.id || `ex_${i + 1}`,
-            name: ex.name || ex.title || "Exam",
-            subject: ex.subject || "",
-            date: ex.date || "TBD",
-            time: ex.time || "09:00 AM",
-            days_remaining: daysRemaining ?? ex.days_remaining ?? 0,
-            venue: ex.venue || ex.location || "Main Hall",
-            total_marks: ex.total_marks || 100
-          };
-        }),
-        updated_by: body.source || "Hermes Agent",
+        exams: examsList.map((ex) => ({
+          subject: ex.subject || ex.name || ex.title || "Exam",
+          date: ex.date || "TBD"
+        })),
         updated_at: new Date().toISOString()
       };
 
@@ -86,8 +70,8 @@ export default async function handler(req, res) {
     let payloadData = {
       total_upcoming: 2,
       exams: [
-        { id: "ex_1", name: "FMGE July 2026 Mock Exam", subject: "All Subjects", date: "2026-08-15", time: "09:00 AM", days_remaining: 20, venue: "Exam Hall 1", total_marks: 300 },
-        { id: "ex_2", name: "Pathology Midterm", subject: "Pathology", date: "2026-08-01", time: "10:00 AM", days_remaining: 6, venue: "Hall B", total_marks: 100 }
+        { subject: "FMGE July Grand Test", date: "2026-08-15" },
+        { subject: "Pathology Midterm Exam", date: "2026-08-01" }
       ],
       updated_at: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     };
@@ -101,7 +85,10 @@ export default async function handler(req, res) {
         const payload = docData.payload || {};
         payloadData = {
           total_upcoming: payload.total_upcoming ?? (payload.exams || []).length,
-          exams: payload.exams || [],
+          exams: (payload.exams || []).map(ex => ({
+            subject: ex.subject,
+            date: ex.date
+          })),
           updated_at: docData.timestamp?.toDate 
             ? docData.timestamp.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
             : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })

@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless Master Endpoint for E-Paper Hardware Display
  * GET /api/epaper
- * Consolidates AC Power + AI Usage + Todoist + MedX + Motra + Class Schedule + Exams for single-fetch rendering
+ * Consolidates AC Power + AI Usage + Todoist + MedX + Motra + Class Schedule + Exams (subject & date only)
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -73,18 +73,17 @@ export default async function handler(req, res) {
           days_since_workout: 245
         },
         class_schedule: {
-          date: new Date().toISOString().split('T')[0],
-          total_classes: 3,
+          total_classes: 2,
           classes: [
-            { subject: "Pathology Lecture", time: "09:00 AM - 10:30 AM", room: "Hall A", topic: "Cell Injury" },
-            { subject: "Pharmacology Practical", time: "11:00 AM - 01:00 PM", room: "Lab 2", topic: "Autonomic NS" }
+            { subject: "Pathology Lecture", date: "2026-07-26 09:00 AM" },
+            { subject: "Pharmacology Practical", date: "2026-07-26 11:00 AM" }
           ]
         },
         exams: {
           total_upcoming: 2,
           exams: [
-            { name: "FMGE July 2026 Grand Test", date: "2026-08-15", days_remaining: 20, venue: "Exam Hall 1" },
-            { name: "Pathology Midterm Exam", date: "2026-08-01", days_remaining: 6, venue: "Hall B" }
+            { subject: "FMGE July Grand Test", date: "2026-08-15" },
+            { subject: "Pathology Midterm Exam", date: "2026-08-01" }
           ]
         }
       }
@@ -170,24 +169,29 @@ export default async function handler(req, res) {
         };
       }
 
-      // Fetch CLASS SCHEDULE
+      // Fetch CLASS SCHEDULE (Subject & Date only)
       const classSnap = await db.collection('api_feeds').doc('class_schedule').get();
       if (classSnap.exists) {
         const payload = classSnap.data().payload || {};
         responsePayload.widgets.class_schedule = {
-          date: payload.date || new Date().toISOString().split('T')[0],
           total_classes: payload.total_classes ?? (payload.classes || []).length,
-          classes: payload.classes || []
+          classes: (payload.classes || []).map(c => ({
+            subject: c.subject,
+            date: c.date
+          }))
         };
       }
 
-      // Fetch EXAMS SCHEDULE
+      // Fetch EXAMS SCHEDULE (Subject & Date only)
       const examsSnap = await db.collection('api_feeds').doc('exams_schedule').get();
       if (examsSnap.exists) {
         const payload = examsSnap.data().payload || {};
         responsePayload.widgets.exams = {
           total_upcoming: payload.total_upcoming ?? (payload.exams || []).length,
-          exams: payload.exams || []
+          exams: (payload.exams || []).map(ex => ({
+            subject: ex.subject,
+            date: ex.date
+          }))
         };
       }
     }
