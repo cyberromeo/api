@@ -23,10 +23,6 @@ export const EPaperHub = ({ feeds, onToast }) => {
 
   // Extract Todoist feed values
   const todoistFeed = feeds ? feeds.find(f => f.apiName === 'TODOIST') : null;
-  const todoistPayload = todoistFeed?.payload || {
-    totalPending: 0,
-    tasks: []
-  };
 
   // Extract MedX Tracker feed values
   const medxTrackerFeed = feeds ? feeds.find(f => f.apiName === 'MEDX_TRACKER' || f.apiName === 'MEDX') : null;
@@ -58,14 +54,14 @@ export const EPaperHub = ({ feeds, onToast }) => {
     daysSinceLastWorkout: 0
   };
 
-  // Extract Class Schedule feed values (Subject & Date only)
+  // Extract Class Schedule feed values
   const classFeed = feeds ? feeds.find(f => f.apiName === 'CLASS_SCHEDULE') : null;
   const classPayload = classFeed?.payload || {
     total_classes: 0,
     classes: []
   };
 
-  // Extract Exams feed values (Subject & Date only)
+  // Extract Exams feed values
   const examsFeed = feeds ? feeds.find(f => f.apiName === 'EXAMS_SCHEDULE') : null;
   const examsPayload = examsFeed?.payload || {
     total_upcoming: 0,
@@ -73,14 +69,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
   };
 
   const hostUrl = window.location.origin;
-  const classScheduleApiUrl = `${hostUrl}/api/class-schedule`;
-  const examsApiUrl = `${hostUrl}/api/exams`;
-  const acPowerApiUrl = `${hostUrl}/api/ac-power`;
-  const aiUsageApiUrl = `${hostUrl}/api/ai-usage`;
-  const todoistApiUrl = `${hostUrl}/api/todoist`;
-  const medxTrackerApiUrl = `${hostUrl}/api/medx-tracker`;
-  const medxStudyApiUrl = `${hostUrl}/api/medx-study`;
-  const motraApiUrl = `${hostUrl}/api/motra`;
+  const singleScheduleApiUrl = `${hostUrl}/api/schedule`;
   const dashApiUrl = `${hostUrl}/api/dash`;
 
   const copyToClipboard = (text, key) => {
@@ -95,7 +84,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
       <div className="page-header">
         <div>
           <h2 className="page-title">E-Paper Display API Hub & Hermes Agent Push Gateway</h2>
-          <p className="page-description">Master /api/dash endpoint & POST endpoints for Hermes Agent schedule pushes</p>
+          <p className="page-description">Master /api/dash endpoint & Single Unified POST /api/schedule for Hermes Agent pushes</p>
         </div>
       </div>
 
@@ -105,52 +94,37 @@ export const EPaperHub = ({ feeds, onToast }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
             <Send size={20} style={{ color: 'var(--primary)' }} />
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Hermes Agent Push API Links</h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>POST endpoints to update Class Schedules & Exams (subject & date only)</p>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Single Unified Hermes Agent Push Gateway</h3>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Push BOTH 'exams' and 'classes' together in a single POST request</p>
             </div>
           </div>
 
-          {/* 1. Class Schedule Push Link */}
-          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: 'var(--radius-md)', marginBottom: '12px', border: '1px solid var(--border-subtle)' }}>
+          {/* Single Unified Push Link */}
+          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--primary)' }}>POST /api/class-schedule</span>
-              <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: '0.72rem' }} onClick={() => copyToClipboard(classScheduleApiUrl, 'Class Schedule Push API')}>
-                {copiedEndpoint === 'Class Schedule Push API' ? <Check size={12} style={{ color: 'var(--accent-emerald)' }} /> : <Copy size={12} />}
-                {copiedEndpoint === 'Class Schedule Push API' ? 'Copied' : 'Copy'}
+              <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--primary)' }}>POST /api/schedule</span>
+              <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: '0.72rem' }} onClick={() => copyToClipboard(singleScheduleApiUrl, 'Unified Schedule Push API')}>
+                {copiedEndpoint === 'Unified Schedule Push API' ? <Check size={12} style={{ color: 'var(--accent-emerald)' }} /> : <Copy size={12} />}
+                {copiedEndpoint === 'Unified Schedule Push API' ? 'Copied' : 'Copy'}
               </button>
             </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#60a5fa', wordBreak: 'break-all', marginBottom: '8px' }}>
-              {classScheduleApiUrl}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              <strong>Body Payload Example:</strong>
-              <pre style={{ background: '#0b0f19', padding: '8px', borderRadius: '6px', fontSize: '0.68rem', marginTop: '4px', overflowX: 'auto' }}>{`{
-  "source": "Hermes Agent",
-  "classes": [
-    { "subject": "Pathology Lecture", "date": "2026-07-26 09:00 AM" }
-  ]
-}`}</pre>
-            </div>
-          </div>
-
-          {/* 2. Exams Schedule Push Link */}
-          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--accent-amber)' }}>POST /api/exams</span>
-              <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: '0.72rem' }} onClick={() => copyToClipboard(examsApiUrl, 'Exams Push API')}>
-                {copiedEndpoint === 'Exams Push API' ? <Check size={12} style={{ color: 'var(--accent-emerald)' }} /> : <Copy size={12} />}
-                {copiedEndpoint === 'Exams Push API' ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24', wordBreak: 'break-all', marginBottom: '8px' }}>
-              {examsApiUrl}
+              {singleScheduleApiUrl}
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
               <strong>Body Payload Example:</strong>
               <pre style={{ background: '#0b0f19', padding: '8px', borderRadius: '6px', fontSize: '0.68rem', marginTop: '4px', overflowX: 'auto' }}>{`{
   "source": "Hermes Agent",
   "exams": [
-    { "subject": "FMGE July Grand Test", "date": "2026-08-15" }
+    { "subject": "FMGE July Grand Test", "date": "2026-08-15" },
+    { "subject": "Pathology Midterm Exam", "date": "2026-08-01" }
+  ],
+  "classes": [
+    {
+      "subject": "Pathology",
+      "start_date": "2026-07-04",
+      "end_date": "2026-07-07"
+    }
   ]
 }`}</pre>
             </div>
@@ -195,7 +169,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
                   (classPayload.classes || []).map((cls, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '2px 0' }}>
                       <span style={{ fontWeight: 700 }}>• {cls.subject}</span>
-                      <span style={{ color: '#4b5563', fontWeight: 600 }}>{cls.date}</span>
+                      <span style={{ color: '#4b5563', fontWeight: 600 }}>{cls.start_date} → {cls.end_date}</span>
                     </div>
                   ))
                 ) : (
