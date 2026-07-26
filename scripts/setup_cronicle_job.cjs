@@ -10,7 +10,8 @@ const CRONICLE_URL = process.env.CRONICLE_URL || 'http://umbrel.local:3012';
 const CRONICLE_API_KEY = process.env.CRONICLE_API_KEY || 'ba768ce3fa7125fa071a5e2d62110bd7';
 
 const ACTIVE_HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0];
-const INTERVAL_MINUTES = [0, 30];
+// Minutes 25, 55 of 6 AM to 12 AM
+const INTERVAL_MINUTES = [25, 55];
 
 // Inline Shell Script using native Node.js 18 fetch
 const inlineScriptContent = `#!/usr/bin/env node
