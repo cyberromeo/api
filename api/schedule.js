@@ -1,7 +1,12 @@
 /**
  * Unified Serverless API Endpoint for Schedule & Exams
- * POST /api/schedule -> Pushes 'classes' and/or 'exams' in a single clean HTTP request
- * GET /api/schedule  -> Returns combined classes and exams schedule
+ * POST /api/schedule
+ * 
+ * Supports flexible body formats:
+ * - { "classes": [...], "exams": [...] }
+ * - [ { "subject": "Pathology", "start_date": "2026-07-04", "end_date": "2026-07-07" } ]
+ * - { "subject": "Pathology", "start_date": "2026-07-04", "end_date": "2026-07-07" } (Single class at root)
+ * - { "subject": "FMGE GT", "date": "2026-08-15" } (Single exam at root)
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -28,21 +33,59 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // --- POST /api/schedule (Single clean push from Hermes Agent) ---
+  // --- POST /api/schedule ---
   if (req.method === 'POST') {
     try {
-      const body = req.body || {};
+      let body = req.body || {};
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch(e) {}
+      }
+
       const responseData = {};
       const source = body.source || 'Hermes Agent';
+
+      // Normalize incoming structure
+      let classesInput = null;
+      let examsInput = null;
+
+      if (Array.isArray(body)) {
+        // Body is a raw array of items
+        const hasExamKeys = body.some(item => item.date && !item.start_date);
+        if (hasExamKeys) {
+          examsInput = body;
+        } else {
+          classesInput = body;
+        }
+      } else if (body.classes || body.schedule || body.class) {
+        classesInput = Array.isArray(body.classes) ? body.classes : 
+                       Array.isArray(body.schedule) ? body.schedule : 
+                       Array.isArray(body.class) ? body.class : [body.class || body.schedule];
+      } else if (body.exams || body.exam) {
+        examsInput = Array.isArray(body.exams) ? body.exams : [body.exam];
+      } else if (body.subject) {
+        // Single object sent at root level e.g. { "subject": "Pathology", "start_date": "...", "end_date": "..." }
+        if (body.start_date || body.end_date) {
+          classesInput = [body];
+        } else {
+          examsInput = [body];
+        }
+      }
+
+      if (body.exams && Array.isArray(body.exams)) {
+        examsInput = body.exams;
+      }
+      if (body.classes && Array.isArray(body.classes)) {
+        classesInput = body.classes;
+      }
 
       if (getApps().length) {
         const db = getFirestore();
 
-        // 1. Process 'classes' if present
-        if (Array.isArray(body.classes)) {
+        // 1. Process Classes
+        if (classesInput && classesInput.length > 0) {
           const classPayload = {
-            total_classes: body.classes.length,
-            classes: body.classes.map((c) => ({
+            total_classes: classesInput.length,
+            classes: classesInput.map((c) => ({
               subject: c.subject || c.name || c.title || "Subject",
               start_date: c.start_date || c.date || new Date().toISOString().split('T')[0],
               end_date: c.end_date || c.start_date || c.date || new Date().toISOString().split('T')[0]
@@ -61,13 +104,13 @@ export default async function handler(req, res) {
           responseData.classes = classPayload;
         }
 
-        // 2. Process 'exams' if present
-        if (Array.isArray(body.exams)) {
+        // 2. Process Exams
+        if (examsInput && examsInput.length > 0) {
           const examsPayload = {
-            total_upcoming: body.exams.length,
-            exams: body.exams.map((ex) => ({
+            total_upcoming: examsInput.length,
+            exams: examsInput.map((ex) => ({
               subject: ex.subject || ex.name || ex.title || "Exam",
-              date: ex.date || "TBD"
+              date: ex.date || ex.start_date || "TBD"
             })),
             updated_at: new Date().toISOString()
           };
