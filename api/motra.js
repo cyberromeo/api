@@ -1,7 +1,7 @@
 /**
- * Vercel Serverless API Endpoint for E-Paper Display Devices
+ * Vercel Serverless API Endpoint for Motra Fitness
  * GET /api/motra
- * Returns clean JSON payload with overall summary AND all 18 individual muscle recovery metrics
+ * Returns summary AND all 18 individual muscle recovery metrics
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -27,28 +27,28 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  try {
-    let defaultMuscles = {
-      abductors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      abs: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      adductors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      biceps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      calves: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      chest: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      forearms: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      glutes: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      hamstrings: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      hipFlexors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      lats: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      lowerBack: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      obliques: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      quads: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      shoulders: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      tibialisAnterior: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      traps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
-      triceps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null }
-    };
+  const defaultMuscles = {
+    abductors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    abs: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    adductors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    biceps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    calves: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    chest: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    forearms: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    glutes: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    hamstrings: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    hipFlexors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    lats: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    lowerBack: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    obliques: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    quads: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    shoulders: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    tibialisAnterior: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    traps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    triceps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null }
+  };
 
+  try {
     let payloadData = {
       overall_recovery: "100%",
       recovered_muscles: "18/18",
@@ -65,13 +65,25 @@ export default async function handler(req, res) {
       if (docSnap.exists) {
         const docData = docSnap.data();
         const summary = docData.payload?.summary || {};
-        const musclesMap = docData.payload?.musclesMap || defaultMuscles;
+        const rawMusclesMap = docData.payload?.musclesMap || {};
+
+        const fullMusclesMap = { ...defaultMuscles };
+        Object.keys(rawMusclesMap).forEach(key => {
+          if (rawMusclesMap[key]) {
+            fullMusclesMap[key] = {
+              recovery: rawMusclesMap[key].recovery ?? 100,
+              daysToRecovery: rawMusclesMap[key].daysToRecovery ?? 0,
+              daysSinceLastUsed: rawMusclesMap[key].daysSinceLastUsed ?? null
+            };
+          }
+        });
+
         payloadData = {
           overall_recovery: summary.overallRecoveryPct || "100%",
           recovered_muscles: summary.recoveredMuscles || "18/18",
           recovering_muscles: summary.recoveringMuscles ?? 0,
           days_since_workout: summary.daysSinceLastWorkout ?? 245,
-          muscles: musclesMap,
+          muscles: fullMusclesMap,
           updated_at: docData.timestamp?.toDate 
             ? docData.timestamp.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
             : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })

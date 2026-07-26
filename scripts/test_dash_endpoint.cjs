@@ -15,6 +15,27 @@ const db = getFirestore();
 async function testDashEndpoint() {
   console.log("📡 Testing /api/dash output locally...");
 
+  const defaultMuscles = {
+    abductors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    abs: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    adductors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    biceps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    calves: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    chest: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    forearms: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    glutes: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    hamstrings: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    hipFlexors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    lats: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    lowerBack: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    obliques: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    quads: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    shoulders: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    tibialisAnterior: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    traps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
+    triceps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null }
+  };
+
   const todayIsoDate = new Date().toISOString().split('T')[0];
 
   const acSnap = await db.collection('api_feeds').doc('ac_power_metrics').get();
@@ -74,7 +95,18 @@ async function testDashEndpoint() {
 
   const motraData = motraSnap.exists ? motraSnap.data().payload || {} : {};
   const motraSummary = motraData.summary || {};
-  const musclesMap = motraData.musclesMap || {};
+  const rawMusclesMap = motraData.musclesMap || {};
+
+  const fullMusclesMap = { ...defaultMuscles };
+  Object.keys(rawMusclesMap).forEach(key => {
+    if (rawMusclesMap[key]) {
+      fullMusclesMap[key] = {
+        recovery: rawMusclesMap[key].recovery ?? 100,
+        daysToRecovery: rawMusclesMap[key].daysToRecovery ?? 0,
+        daysSinceLastUsed: rawMusclesMap[key].daysSinceLastUsed ?? null
+      };
+    }
+  });
 
   const dashResult = {
     timestamp: new Date().toISOString(),
@@ -122,11 +154,11 @@ async function testDashEndpoint() {
       recovered_muscles: motraSummary.recoveredMuscles || "18/18",
       recovering_muscles: motraSummary.recoveringMuscles || 0,
       days_since_workout: motraSummary.daysSinceLastWorkout || 245,
-      muscles: musclesMap
+      muscles: fullMusclesMap
     }
   };
 
-  console.log("✅ CLEAN /api/dash OUTPUT:\n", JSON.stringify(dashResult, null, 2));
+  console.log("✅ LIVE /api/dash OUTPUT WITH ALL 18 MUSCLES:\n", JSON.stringify(dashResult, null, 2));
   process.exit(0);
 }
 

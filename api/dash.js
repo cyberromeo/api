@@ -3,14 +3,14 @@
  * GET /api/dash
  * 
  * Clean JSON payload for E-Paper Screen:
- * 1. class_schedule: Today's class (filtered via start_date & end_date) or "no class today"
+ * 1. class_schedule: Today's class or "no class today"
  * 2. exams: Upcoming exams ("Today" badge if scheduled on current date)
  * 3. ac_power: Today, Week, Month kWh
  * 4. ai_usage: 5h, Weekly, Monthly limits & reset times
  * 5. todoist: Separated into 'tasks' and 'shopping_list' with priority, overdue & completion
  * 6. medx_tracker: Overall completion % out of 121 items
  * 7. medx_studytime: Study time /11hrs and PYQ time /2hrs
- * 8. motra: Overall recovery & all 18 individual muscles recovery stats
+ * 8. motra: Overall recovery & ALL 18 individual muscles recovery stats
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
     if (getApps().length) {
       const db = getFirestore();
 
-      // 1. CLASS SCHEDULE (Check if today fall between start_date and end_date)
+      // 1. CLASS SCHEDULE
       const classSnap = await db.collection('api_feeds').doc('class_schedule').get();
       if (classSnap.exists) {
         const classPayload = classSnap.data().payload || {};
@@ -266,18 +266,30 @@ export default async function handler(req, res) {
         };
       }
 
-      // 8. MOTRA MUSCLE RECOVERY
+      // 8. MOTRA MUSCLE RECOVERY (Ensure ALL 18 muscles are always returned)
       const motraSnap = await db.collection('api_feeds').doc('motra_metrics').get();
       if (motraSnap.exists) {
         const summary = motraSnap.data().payload?.summary || {};
-        const musclesMap = motraSnap.data().payload?.musclesMap || defaultMusclesMap;
+        const rawMusclesMap = motraSnap.data().payload?.musclesMap || {};
+
+        // Merge raw map with default 18 muscles map so all 18 muscles are always populated
+        const fullMusclesMap = { ...defaultMusclesMap };
+        Object.keys(rawMusclesMap).forEach(key => {
+          if (rawMusclesMap[key]) {
+            fullMusclesMap[key] = {
+              recovery: rawMusclesMap[key].recovery ?? 100,
+              daysToRecovery: rawMusclesMap[key].daysToRecovery ?? 0,
+              daysSinceLastUsed: rawMusclesMap[key].daysSinceLastUsed ?? null
+            };
+          }
+        });
 
         dashData.motra = {
           overall_recovery: summary.overallRecoveryPct || "100%",
           recovered_muscles: summary.recoveredMuscles || "18/18",
           recovering_muscles: summary.recoveringMuscles ?? 0,
           days_since_workout: summary.daysSinceLastWorkout ?? 245,
-          muscles: musclesMap
+          muscles: fullMusclesMap
         };
       }
     }
