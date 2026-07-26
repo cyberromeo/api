@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless Master Endpoint for E-Paper Hardware Display
  * GET /api/epaper
- * Consolidates AC Power + AI Usage + Todoist + MedX + Motra + Class Schedule + Exams (subject & date only)
+ * Consolidates AC Power + AI Usage + Todoist + MedX + Motra + Class Schedule + Exams
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -33,26 +33,22 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString(),
       widgets: {
         ac_power: {
-          today_kwh: "5.08",
-          week_kwh: "5.08",
-          month_kwh: "80.76",
+          today_kwh: "0.00",
+          week_kwh: "0.00",
+          month_kwh: "0.00",
           unit: "kWh"
         },
         ai_usage: {
           rolling_5h: "0%",
-          rolling_reset: "29 mins",
-          weekly_usage: "22%",
-          weekly_reset: "16 hours",
-          monthly_usage: "68%",
-          monthly_reset: "12 days"
+          rolling_reset: "N/A",
+          weekly_usage: "0%",
+          weekly_reset: "N/A",
+          monthly_usage: "0%",
+          monthly_reset: "N/A"
         },
         todoist: {
-          total_pending: 3,
-          tasks: [
-            { content: "Buy specs 👓", due: "this Sunday evening", priority: 1, is_overdue: true },
-            { content: "Book psychiatrist appointment", due: "2026-07-10", priority: 3, is_overdue: true },
-            { content: "Whey protein", due: "No due date", priority: 1, is_overdue: false }
-          ]
+          total_pending: 0,
+          tasks: []
         },
         medx_tracker: {
           completion_percentage: "0.0%",
@@ -64,27 +60,21 @@ export default async function handler(req, res) {
           today_study_hrs: "0.00",
           today_pyq_hrs: "0.00",
           streak_days: 0,
-          weekly_total_hrs: "0.17"
+          weekly_total_hrs: "0.00"
         },
         motra: {
           overall_recovery: "100%",
           recovered_muscles: "18/18",
           recovering_muscles: 0,
-          days_since_workout: 245
+          days_since_workout: 0
         },
         class_schedule: {
-          total_classes: 2,
-          classes: [
-            { subject: "Pathology Lecture", date: "2026-07-26 09:00 AM" },
-            { subject: "Pharmacology Practical", date: "2026-07-26 11:00 AM" }
-          ]
+          total_classes: 0,
+          classes: []
         },
         exams: {
-          total_upcoming: 2,
-          exams: [
-            { subject: "FMGE July Grand Test", date: "2026-08-15" },
-            { subject: "Pathology Midterm Exam", date: "2026-08-01" }
-          ]
+          total_upcoming: 0,
+          exams: []
         }
       }
     };
@@ -165,11 +155,11 @@ export default async function handler(req, res) {
           overall_recovery: summary.overallRecoveryPct || "100%",
           recovered_muscles: summary.recoveredMuscles || "18/18",
           recovering_muscles: summary.recoveringMuscles ?? 0,
-          days_since_workout: summary.daysSinceLastWorkout ?? 245
+          days_since_workout: summary.daysSinceLastWorkout ?? 0
         };
       }
 
-      // Fetch CLASS SCHEDULE (Subject & Date only)
+      // Fetch CLASS SCHEDULE
       const classSnap = await db.collection('api_feeds').doc('class_schedule').get();
       if (classSnap.exists) {
         const payload = classSnap.data().payload || {};
@@ -182,7 +172,7 @@ export default async function handler(req, res) {
         };
       }
 
-      // Fetch EXAMS SCHEDULE (Subject & Date only)
+      // Fetch EXAMS SCHEDULE
       const examsSnap = await db.collection('api_feeds').doc('exams_schedule').get();
       if (examsSnap.exists) {
         const payload = examsSnap.data().payload || {};

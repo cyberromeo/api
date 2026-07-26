@@ -68,11 +68,8 @@ export default async function handler(req, res) {
   // --- GET /api/class-schedule (Fetched by E-Paper Screen / Clients) ---
   try {
     let payloadData = {
-      total_classes: 2,
-      classes: [
-        { subject: "Pathology Lecture", date: "2026-07-26 09:00 AM" },
-        { subject: "Pharmacology Practical", date: "2026-07-26 11:00 AM" }
-      ],
+      total_classes: 0,
+      classes: [],
       updated_at: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     };
 

@@ -7,28 +7,25 @@ export const EPaperHub = ({ feeds, onToast }) => {
   // Extract AC Power feed values
   const acFeed = feeds ? feeds.find(f => f.apiName === 'AC_POWER') : null;
   const acSummary = acFeed?.payload?.summary || {
-    todayKwh: 5.08,
-    thisWeekKwh: 5.08,
-    thisMonthKwh: 80.76,
+    todayKwh: 0,
+    thisWeekKwh: 0,
+    thisMonthKwh: 0,
     unit: 'kWh'
   };
 
   // Extract AI Usage feed values
   const aiFeed = feeds ? feeds.find(f => f.apiName === 'AI_USAGE') : null;
   const aiSummary = aiFeed?.payload?.summary || {
-    rolling: { percentage: 0, resetIn: "25 minutes" },
-    weekly: { percentage: 22, resetIn: "16 hours 50 minutes" },
-    monthly: { percentage: 68, resetIn: "12 days 8 hours" }
+    rolling: { percentage: 0, resetIn: "N/A" },
+    weekly: { percentage: 0, resetIn: "N/A" },
+    monthly: { percentage: 0, resetIn: "N/A" }
   };
 
   // Extract Todoist feed values
   const todoistFeed = feeds ? feeds.find(f => f.apiName === 'TODOIST') : null;
   const todoistPayload = todoistFeed?.payload || {
-    totalPending: 3,
-    tasks: [
-      { id: "1", content: "Buy specs 👓", due: "this Sunday evening", priority: 1, isOverdue: true },
-      { id: "2", content: "Book psychiatrist appointment", due: "2026-07-10", priority: 3, isOverdue: true }
-    ]
+    totalPending: 0,
+    tasks: []
   };
 
   // Extract MedX Tracker feed values
@@ -49,7 +46,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
     todayStudyHours: "0.00",
     todayPyqHours: "0.00",
     streakDays: 0,
-    weeklyGrandTotalHours: "0.17"
+    weeklyGrandTotalHours: "0.00"
   };
 
   // Extract Motra feed values
@@ -58,27 +55,21 @@ export const EPaperHub = ({ feeds, onToast }) => {
     overallRecoveryPct: "100%",
     recoveredMuscles: "18/18",
     recoveringMuscles: 0,
-    daysSinceLastWorkout: 245
+    daysSinceLastWorkout: 0
   };
 
   // Extract Class Schedule feed values (Subject & Date only)
   const classFeed = feeds ? feeds.find(f => f.apiName === 'CLASS_SCHEDULE') : null;
   const classPayload = classFeed?.payload || {
-    total_classes: 2,
-    classes: [
-      { subject: "Pathology Lecture", date: "2026-07-26 09:00 AM" },
-      { subject: "Pharmacology Practical", date: "2026-07-26 11:00 AM" }
-    ]
+    total_classes: 0,
+    classes: []
   };
 
   // Extract Exams feed values (Subject & Date only)
   const examsFeed = feeds ? feeds.find(f => f.apiName === 'EXAMS_SCHEDULE') : null;
   const examsPayload = examsFeed?.payload || {
-    total_upcoming: 2,
-    exams: [
-      { subject: "FMGE July Grand Test", date: "2026-08-15" },
-      { subject: "Pathology Midterm Exam", date: "2026-08-01" }
-    ]
+    total_upcoming: 0,
+    exams: []
   };
 
   const hostUrl = window.location.origin;
@@ -90,7 +81,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
   const medxTrackerApiUrl = `${hostUrl}/api/medx-tracker`;
   const medxStudyApiUrl = `${hostUrl}/api/medx-study`;
   const motraApiUrl = `${hostUrl}/api/motra`;
-  const masterApiUrl = `${hostUrl}/api/epaper`;
+  const dashApiUrl = `${hostUrl}/api/dash`;
 
   const copyToClipboard = (text, key) => {
     navigator.clipboard.writeText(text);
@@ -104,7 +95,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
       <div className="page-header">
         <div>
           <h2 className="page-title">E-Paper Display API Hub & Hermes Agent Push Gateway</h2>
-          <p className="page-description">Hardware endpoints & POST API endpoints for Hermes Agent to push Class Schedule & Exams DB</p>
+          <p className="page-description">Master /api/dash endpoint & POST endpoints for Hermes Agent schedule pushes</p>
         </div>
       </div>
 
@@ -136,8 +127,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
               <pre style={{ background: '#0b0f19', padding: '8px', borderRadius: '6px', fontSize: '0.68rem', marginTop: '4px', overflowX: 'auto' }}>{`{
   "source": "Hermes Agent",
   "classes": [
-    { "subject": "Pathology Lecture", "date": "2026-07-26 09:00 AM" },
-    { "subject": "Pharmacology Practical", "date": "2026-07-26 11:00 AM" }
+    { "subject": "Pathology Lecture", "date": "2026-07-26 09:00 AM" }
   ]
 }`}</pre>
             </div>
@@ -160,8 +150,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
               <pre style={{ background: '#0b0f19', padding: '8px', borderRadius: '6px', fontSize: '0.68rem', marginTop: '4px', overflowX: 'auto' }}>{`{
   "source": "Hermes Agent",
   "exams": [
-    { "subject": "FMGE July Grand Test", "date": "2026-08-15" },
-    { "subject": "Pathology Midterm Exam", "date": "2026-08-01" }
+    { "subject": "FMGE July Grand Test", "date": "2026-08-15" }
   ]
 }`}</pre>
             </div>
@@ -190,7 +179,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
             boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1)',
             border: '4px solid #374151'
           }}>
-            {/* Widget 1: Class Schedule (Subject & Date only) */}
+            {/* Widget 1: Class Schedule */}
             <div style={{ borderBottom: '2px solid #111827', paddingBottom: '6px', marginBottom: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '800', fontSize: '0.8rem' }}>
@@ -202,28 +191,40 @@ export const EPaperHub = ({ feeds, onToast }) => {
               </div>
 
               <div style={{ background: '#ffffff', borderRadius: '4px', border: '1px solid #9ca3af', padding: '6px' }}>
-                {(classPayload.classes || []).map((cls, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '2px 0', borderBottom: i < (classPayload.classes || []).length - 1 ? '1px solid #e5e7eb' : 'none' }}>
-                    <span style={{ fontWeight: 700 }}>• {cls.subject}</span>
-                    <span style={{ color: '#4b5563', fontWeight: 600 }}>{cls.date}</span>
+                {(classPayload.classes || []).length > 0 ? (
+                  (classPayload.classes || []).map((cls, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '2px 0' }}>
+                      <span style={{ fontWeight: 700 }}>• {cls.subject}</span>
+                      <span style={{ color: '#4b5563', fontWeight: 600 }}>{cls.date}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ fontSize: '0.72rem', color: '#6b7280', fontStyle: 'italic', textAlign: 'center' }}>
+                    no class today
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
-            {/* Widget 2: Upcoming Exams (Subject & Date only) */}
+            {/* Widget 2: Upcoming Exams */}
             <div style={{ borderBottom: '2px solid #111827', paddingBottom: '6px', marginBottom: '6px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '800', fontSize: '0.8rem', marginBottom: '4px' }}>
                 <GraduationCap size={14} /> UPCOMING EXAMS ({examsPayload.total_upcoming || 0})
               </div>
 
               <div style={{ background: '#ffffff', borderRadius: '4px', border: '1px solid #9ca3af', padding: '6px' }}>
-                {(examsPayload.exams || []).map((ex, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '2px 0', borderBottom: i < (examsPayload.exams || []).length - 1 ? '1px solid #e5e7eb' : 'none' }}>
-                    <span style={{ fontWeight: 700 }}>🏆 {ex.subject}</span>
-                    <span style={{ color: '#dc2626', fontWeight: 800 }}>{ex.date}</span>
+                {(examsPayload.exams || []).length > 0 ? (
+                  (examsPayload.exams || []).map((ex, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '2px 0' }}>
+                      <span style={{ fontWeight: 700 }}>🏆 {ex.subject}</span>
+                      <span style={{ color: '#dc2626', fontWeight: 800 }}>{ex.date}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ fontSize: '0.72rem', color: '#6b7280', fontStyle: 'italic', textAlign: 'center' }}>
+                    no upcoming exams scheduled
                   </div>
-                ))}
+                )}
               </div>
             </div>
 

@@ -68,11 +68,8 @@ export default async function handler(req, res) {
   // --- GET /api/exams (Fetched by E-Paper Screen / Clients) ---
   try {
     let payloadData = {
-      total_upcoming: 2,
-      exams: [
-        { subject: "FMGE July Grand Test", date: "2026-08-15" },
-        { subject: "Pathology Midterm Exam", date: "2026-08-01" }
-      ],
+      total_upcoming: 0,
+      exams: [],
       updated_at: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     };
 
