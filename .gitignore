@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+.pnpm-store
+
+# Production build
+dist/
+build/
+
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+*.json
+!package.json
+!tsconfig.json
+!jsconfig.json
+
+# System and logs
+*.log
+.DS_Store
+opencode_page.html
+t1.json
