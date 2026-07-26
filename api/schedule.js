@@ -1,27 +1,10 @@
 /**
  * Unified Serverless API Endpoint for Schedule & Exams
  * POST /api/schedule
- * 
- * Supports flexible body formats:
- * - { "classes": [...], "exams": [...] }
- * - [ { "subject": "Pathology", "start_date": "2026-07-04", "end_date": "2026-07-07" } ]
- * - { "subject": "Pathology", "start_date": "2026-07-04", "end_date": "2026-07-07" } (Single class at root)
- * - { "subject": "FMGE GT", "date": "2026-08-15" } (Single exam at root)
+ * GET /api/schedule
  */
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-if (!getApps().length) {
-  try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}');
-    if (serviceAccount.project_id) {
-      initializeApp({ credential: cert(serviceAccount) });
-    }
-  } catch (err) {
-    console.error("Firebase Admin init error:", err);
-  }
-}
+import { getDb } from './_firebase.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -44,12 +27,10 @@ export default async function handler(req, res) {
       const responseData = {};
       const source = body.source || 'Hermes Agent';
 
-      // Normalize incoming structure
       let classesInput = null;
       let examsInput = null;
 
       if (Array.isArray(body)) {
-        // Body is a raw array of items
         const hasExamKeys = body.some(item => item.date && !item.start_date);
         if (hasExamKeys) {
           examsInput = body;
@@ -63,7 +44,6 @@ export default async function handler(req, res) {
       } else if (body.exams || body.exam) {
         examsInput = Array.isArray(body.exams) ? body.exams : [body.exam];
       } else if (body.subject) {
-        // Single object sent at root level e.g. { "subject": "Pathology", "start_date": "...", "end_date": "..." }
         if (body.start_date || body.end_date) {
           classesInput = [body];
         } else {
@@ -78,58 +58,56 @@ export default async function handler(req, res) {
         classesInput = body.classes;
       }
 
-      if (getApps().length) {
-        const db = getFirestore();
+      const db = getDb();
 
-        // 1. Process Classes
-        if (classesInput && classesInput.length > 0) {
-          const classPayload = {
-            total_classes: classesInput.length,
-            classes: classesInput.map((c) => ({
-              subject: c.subject || c.name || c.title || "Subject",
-              start_date: c.start_date || c.date || new Date().toISOString().split('T')[0],
-              end_date: c.end_date || c.start_date || c.date || new Date().toISOString().split('T')[0]
-            })),
-            updated_at: new Date().toISOString()
-          };
+      // 1. Process Classes
+      if (classesInput && classesInput.length > 0) {
+        const classPayload = {
+          total_classes: classesInput.length,
+          classes: classesInput.map((c) => ({
+            subject: c.subject || c.name || c.title || "Subject",
+            start_date: c.start_date || c.date || new Date().toISOString().split('T')[0],
+            end_date: c.end_date || c.start_date || c.date || new Date().toISOString().split('T')[0]
+          })),
+          updated_at: new Date().toISOString()
+        };
 
-          await db.collection('api_feeds').doc('class_schedule').set({
-            apiName: 'CLASS_SCHEDULE',
-            source: source,
-            timestamp: new Date(),
-            status: 'success',
-            payload: classPayload
-          }, { merge: true });
+        await db.collection('api_feeds').doc('class_schedule').set({
+          apiName: 'CLASS_SCHEDULE',
+          source: source,
+          timestamp: new Date(),
+          status: 'success',
+          payload: classPayload
+        }, { merge: true });
 
-          responseData.classes = classPayload;
-        }
+        responseData.classes = classPayload;
+      }
 
-        // 2. Process Exams
-        if (examsInput && examsInput.length > 0) {
-          const examsPayload = {
-            total_upcoming: examsInput.length,
-            exams: examsInput.map((ex) => ({
-              subject: ex.subject || ex.name || ex.title || "Exam",
-              date: ex.date || ex.start_date || "TBD"
-            })),
-            updated_at: new Date().toISOString()
-          };
+      // 2. Process Exams
+      if (examsInput && examsInput.length > 0) {
+        const examsPayload = {
+          total_upcoming: examsInput.length,
+          exams: examsInput.map((ex) => ({
+            subject: ex.subject || ex.name || ex.title || "Exam",
+            date: ex.date || ex.start_date || "TBD"
+          })),
+          updated_at: new Date().toISOString()
+        };
 
-          await db.collection('api_feeds').doc('exams_schedule').set({
-            apiName: 'EXAMS_SCHEDULE',
-            source: source,
-            timestamp: new Date(),
-            status: 'success',
-            payload: examsPayload
-          }, { merge: true });
+        await db.collection('api_feeds').doc('exams_schedule').set({
+          apiName: 'EXAMS_SCHEDULE',
+          source: source,
+          timestamp: new Date(),
+          status: 'success',
+          payload: examsPayload
+        }, { merge: true });
 
-          responseData.exams = examsPayload;
-        }
+        responseData.exams = examsPayload;
       }
 
       return res.status(200).json({
         status: "success",
-        message: "Schedule updated successfully",
+        message: "Schedule updated successfully in Firestore",
         data: responseData
       });
     } catch (err) {
@@ -140,36 +118,33 @@ export default async function handler(req, res) {
 
   // --- GET /api/schedule ---
   try {
+    const db = getDb();
     let classesData = { total_classes: 0, classes: [] };
     let examsData = { total_upcoming: 0, exams: [] };
 
-    if (getApps().length) {
-      const db = getFirestore();
+    const classSnap = await db.collection('api_feeds').doc('class_schedule').get();
+    if (classSnap.exists) {
+      const payload = classSnap.data().payload || {};
+      classesData = {
+        total_classes: payload.total_classes ?? (payload.classes || []).length,
+        classes: (payload.classes || []).map(c => ({
+          subject: c.subject,
+          start_date: c.start_date,
+          end_date: c.end_date
+        }))
+      };
+    }
 
-      const classSnap = await db.collection('api_feeds').doc('class_schedule').get();
-      if (classSnap.exists) {
-        const payload = classSnap.data().payload || {};
-        classesData = {
-          total_classes: payload.total_classes ?? (payload.classes || []).length,
-          classes: (payload.classes || []).map(c => ({
-            subject: c.subject,
-            start_date: c.start_date,
-            end_date: c.end_date
-          }))
-        };
-      }
-
-      const examsSnap = await db.collection('api_feeds').doc('exams_schedule').get();
-      if (examsSnap.exists) {
-        const payload = examsSnap.data().payload || {};
-        examsData = {
-          total_upcoming: payload.total_upcoming ?? (payload.exams || []).length,
-          exams: (payload.exams || []).map(ex => ({
-            subject: ex.subject,
-            date: ex.date
-          }))
-        };
-      }
+    const examsSnap = await db.collection('api_feeds').doc('exams_schedule').get();
+    if (examsSnap.exists) {
+      const payload = examsSnap.data().payload || {};
+      examsData = {
+        total_upcoming: payload.total_upcoming ?? (payload.exams || []).length,
+        exams: (payload.exams || []).map(ex => ({
+          subject: ex.subject,
+          date: ex.date
+        }))
+      };
     }
 
     return res.status(200).json({
