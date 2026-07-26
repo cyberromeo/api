@@ -15,11 +15,6 @@ export const EPaperHub = ({ feeds, onToast }) => {
 
   // Extract AI Usage feed values
   const aiFeed = feeds ? feeds.find(f => f.apiName === 'AI_USAGE') : null;
-  const aiSummary = aiFeed?.payload?.summary || {
-    rolling: { percentage: 0, resetIn: "N/A" },
-    weekly: { percentage: 0, resetIn: "N/A" },
-    monthly: { percentage: 0, resetIn: "N/A" }
-  };
 
   // Extract Todoist feed values
   const todoistFeed = feeds ? feeds.find(f => f.apiName === 'TODOIST') : null;
@@ -70,7 +65,6 @@ export const EPaperHub = ({ feeds, onToast }) => {
 
   const hostUrl = window.location.origin;
   const singleScheduleApiUrl = `${hostUrl}/api/schedule`;
-  const dashApiUrl = `${hostUrl}/api/dash`;
 
   const copyToClipboard = (text, key) => {
     navigator.clipboard.writeText(text);
@@ -95,7 +89,7 @@ export const EPaperHub = ({ feeds, onToast }) => {
             <Send size={20} style={{ color: 'var(--primary)' }} />
             <div>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Single Unified Hermes Agent Push Gateway</h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Push BOTH 'exams' and 'classes' together in a single POST request</p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Push BOTH 'exams' and 'classes' together in a single clean POST request</p>
             </div>
           </div>
 
@@ -114,7 +108,6 @@ export const EPaperHub = ({ feeds, onToast }) => {
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
               <strong>Body Payload Example:</strong>
               <pre style={{ background: '#0b0f19', padding: '8px', borderRadius: '6px', fontSize: '0.68rem', marginTop: '4px', overflowX: 'auto' }}>{`{
-  "source": "Hermes Agent",
   "exams": [
     { "subject": "FMGE July Grand Test", "date": "2026-08-15" },
     { "subject": "Pathology Midterm Exam", "date": "2026-08-01" }

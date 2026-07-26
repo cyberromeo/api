@@ -1,6 +1,6 @@
 /**
  * Unified Serverless API Endpoint for Schedule & Exams
- * POST /api/schedule -> Pushes both 'classes' and 'exams' in a single HTTP request (Used by Hermes Agent)
+ * POST /api/schedule -> Pushes 'classes' and/or 'exams' in a single clean HTTP request
  * GET /api/schedule  -> Returns combined classes and exams schedule
  */
 
@@ -28,16 +28,17 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // --- POST /api/schedule (Single unified push from Hermes Agent) ---
+  // --- POST /api/schedule (Single clean push from Hermes Agent) ---
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
       const responseData = {};
+      const source = body.source || 'Hermes Agent';
 
       if (getApps().length) {
         const db = getFirestore();
 
-        // 1. Process 'classes' if present in request body
+        // 1. Process 'classes' if present
         if (Array.isArray(body.classes)) {
           const classPayload = {
             total_classes: body.classes.length,
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
 
           await db.collection('api_feeds').doc('class_schedule').set({
             apiName: 'CLASS_SCHEDULE',
-            source: body.source || 'Hermes Agent',
+            source: source,
             timestamp: new Date(),
             status: 'success',
             payload: classPayload
@@ -60,7 +61,7 @@ export default async function handler(req, res) {
           responseData.classes = classPayload;
         }
 
-        // 2. Process 'exams' if present in request body
+        // 2. Process 'exams' if present
         if (Array.isArray(body.exams)) {
           const examsPayload = {
             total_upcoming: body.exams.length,
@@ -73,7 +74,7 @@ export default async function handler(req, res) {
 
           await db.collection('api_feeds').doc('exams_schedule').set({
             apiName: 'EXAMS_SCHEDULE',
-            source: body.source || 'Hermes Agent',
+            source: source,
             timestamp: new Date(),
             status: 'success',
             payload: examsPayload
@@ -85,7 +86,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         status: "success",
-        message: "Unified schedule updated successfully",
+        message: "Schedule updated successfully",
         data: responseData
       });
     } catch (err) {
@@ -94,7 +95,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // --- GET /api/schedule (Fetched by Clients) ---
+  // --- GET /api/schedule ---
   try {
     let classesData = { total_classes: 0, classes: [] };
     let examsData = { total_upcoming: 0, exams: [] };
