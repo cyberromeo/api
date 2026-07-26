@@ -6,15 +6,15 @@ import {
   Clock, 
   Sparkles, 
   Server, 
-  CheckCircle,
-  CloudLightning
+  Activity,
+  Zap,
+  CheckCircle2
 } from 'lucide-react';
 import { isFirebaseConfigured } from '../firebase/config';
 import { pushApiFeedRecord } from '../firebase/feedService';
 import { AcPowerWidget } from './AcPowerWidget';
 
 export const Overview = ({ feeds, onToast }) => {
-
   const [testApiName, setTestApiName] = useState('AC_POWER');
   const [testPayload, setTestPayload] = useState('{\n  "voltage": 230,\n  "current": 5.2,\n  "status": "ONLINE"\n}');
   const [isPushing, setIsPushing] = useState(false);
@@ -40,21 +40,15 @@ export const Overview = ({ feeds, onToast }) => {
     <div>
       <div className="page-header">
         <div>
-          <h2 className="page-title">System Overview</h2>
-          <p className="page-description">epaper-api hub state & real-time telemetry summary</p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn btn-secondary" onClick={() => onToast("System operational")}>
-            <CloudLightning size={16} /> Check Health
-          </button>
+          <h2 className="page-title">Overview Widgets</h2>
+          <p className="page-description">Real-time live telemetry widgets based on ingested data</p>
         </div>
       </div>
 
       {/* Primary Feature Widget: AC Power Telemetry */}
       <AcPowerWidget feedData={feeds} />
 
-      {/* Top Metrics Grid */}
-
+      {/* Metric Cards Grid */}
       <div className="grid-3">
         <div className="glass-card metric-card">
           <div className="metric-icon-box">
@@ -97,7 +91,7 @@ export const Overview = ({ feeds, onToast }) => {
             <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>Simulate API Push</h3>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '20px' }}>
-            Test your database pipe directly from the dashboard. In production, your <strong>Cronicle Docker tasks</strong> will send data here automatically.
+            Test your database pipe directly from the dashboard.
           </p>
 
           <form onSubmit={handleTestPush}>
@@ -110,7 +104,7 @@ export const Overview = ({ feeds, onToast }) => {
                 className="input-field"
                 value={testApiName}
                 onChange={(e) => setTestApiName(e.target.value)}
-                placeholder="e.g. AC_POWER or SOLAR_GRID"
+                placeholder="e.g. AC_POWER or MOTRA"
                 required
               />
             </div>
@@ -134,32 +128,32 @@ export const Overview = ({ feeds, onToast }) => {
           </form>
         </div>
 
-        {/* Architecture Flow Info */}
+        {/* System Pipeline summary */}
         <div className="glass-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
             <Cpu size={20} style={{ color: 'var(--accent-cyan)' }} />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>System Architecture</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>Data Pipeline</h3>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.9rem' }}>
             <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontWeight: '700', color: 'var(--accent-cyan)', marginBottom: '4px' }}>1. External APIs & Cronicle</div>
+              <div style={{ fontWeight: '700', color: 'var(--accent-cyan)', marginBottom: '4px' }}>1. Cronicle Workers</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Cronicle Docker container runs scheduled tasks fetching external API responses (e.g. AC Power metrics, weather, stock APIs).
+                Runs 6 staggered crons every 30 minutes from 6 AM to 12 AM.
               </div>
             </div>
 
             <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontWeight: '700', color: 'var(--primary)', marginBottom: '4px' }}>2. Firebase Database Hub</div>
+              <div style={{ fontWeight: '700', color: 'var(--primary)', marginBottom: '4px' }}>2. Firebase Firestore</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Cronicle pushes structured JSON documents directly into Firebase Firestore <code>api_feeds</code> collection.
+                Stores document feeds in <code>api_feeds</code> collection.
               </div>
             </div>
 
             <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontWeight: '700', color: 'var(--accent-emerald)', marginBottom: '4px' }}>3. Vercel Web Dashboard</div>
+              <div style={{ fontWeight: '700', color: 'var(--accent-emerald)', marginBottom: '4px' }}>3. Universal E-Paper Output</div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                This React web application auto-syncs via Firebase real-time listeners and displays structured metrics to you.
+                Exposes aggregated <code>GET /api/dash</code> for hardware displays.
               </div>
             </div>
           </div>

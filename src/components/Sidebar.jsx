@@ -1,25 +1,24 @@
 import React from 'react';
 import { 
   LayoutDashboard, 
-  Activity, 
-  BookOpen, 
-  Terminal, 
+  Database, 
+  ArrowDownLeft, 
+  ArrowUpRight, 
+  Monitor, 
   Zap, 
   CheckCircle2, 
-  AlertCircle,
-  Monitor
+  AlertCircle
 } from 'lucide-react';
 import { isFirebaseConfigured } from '../firebase/config';
 
 export const Sidebar = ({ activeTab, setActiveTab }) => {
   const navItems = [
-    { id: 'epaper', label: 'E-Paper Screen', icon: Monitor },
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'feed', label: 'Universal Feed', icon: Activity },
-    { id: 'registry', label: 'API Registry', icon: BookOpen },
-    { id: 'cronicle', label: 'Cronicle Workers', icon: Terminal },
+    { id: 'overview', label: 'Overview Widgets', icon: LayoutDashboard },
+    { id: 'database', label: 'Database Logs', icon: Database },
+    { id: 'inbound', label: 'Inbound APIs', icon: ArrowDownLeft },
+    { id: 'outbound', label: 'Outbound APIs', icon: ArrowUpRight },
+    { id: 'epaper', label: 'E-Paper Screen', icon: Monitor }
   ];
-
 
   return (
     <aside className="sidebar">
