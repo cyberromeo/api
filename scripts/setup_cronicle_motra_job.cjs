@@ -1,10 +1,19 @@
 /**
- * Cronicle Job Setup Script for Motra Muscle Recovery (All 18 Muscles)
- * Registers/Updates event on http://umbrel.local:3012
- * Schedule: Every 30 minutes (Minutes 5, 35 of 6 AM to 12 AM)
+ * Cronicle Job Setup - Motra Muscle Recovery (Self-Refreshing Auth)
+ * 
+ * Reverse-engineered auth flow:
+ *   1. Read saved Firebase refresh token
+ *   2. POST to securetoken.googleapis.com to mint a fresh ID token (60min)
+ *   3. Use fresh ID token to call backend.motra.com/user/muscle-recovery
+ *   4. Write all 18 muscles to Firestore
+ * 
+ * The refresh token NEVER expires (unless user revokes it).
+ * This means the Cronicle job is fully autonomous forever.
  */
 
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const CRONICLE_URL = process.env.CRONICLE_URL || 'http://umbrel.local:3012';
 const CRONICLE_API_KEY = process.env.CRONICLE_API_KEY || 'ba768ce3fa7125fa071a5e2d62110bd7';
@@ -12,19 +21,55 @@ const CRONICLE_API_KEY = process.env.CRONICLE_API_KEY || 'ba768ce3fa7125fa071a5e
 const ACTIVE_HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0];
 const INTERVAL_MINUTES = [5, 35];
 
-// Self-contained inline Node.js script using native fetch
+// Read refresh token from file
+const REFRESH_TOKEN_FILE = path.resolve(__dirname, '..', '.motra_refresh_token');
+const REFRESH_TOKEN = fs.readFileSync(REFRESH_TOKEN_FILE, 'utf8').trim();
+
+if (!REFRESH_TOKEN) {
+  console.error("❌ No refresh token found in .motra_refresh_token");
+  process.exit(1);
+}
+
+console.log(`✅ Loaded refresh token (${REFRESH_TOKEN.substring(0, 20)}...)`);
+
+// Self-contained Cronicle inline script with embedded refresh token
 const inlineScriptContent = `#!/usr/bin/env node
 
-const MOTRA_TOKEN = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2ZWUwMzFlODZhM2YwZmNkOWI2ZDcwMDJiMDJiMDg6ZDJmNTVkZTQiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiU1JJSEFSSSBQUkFCQUtBUkFOIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pnMWR3LV9SbGZLbG4zLUhTM21UbUJDTHFiVU11OVRuRW8wNENZcWtCc3pfQkQydEk0PXM5Ni1jIiwiaXNzIjoiaHR0cHM6Ly9zZWN1cmV0b2tlbi5nb29nbGUuY29tL3RyYWluLTE2NWQzIiwiYXVkIjoidHJhaW4tMTY1ZDMiLCJhdXRoX3RpbWUiOjE3NzgyMjk4MzAsInVzZXJfaWQiOiI3dTRHTFRrV2ZJTXBqSjhHd2pUYXlyNTJLa2IyIiwic3ViIjoiN3U0R0xUa1dmSU1wako4R3dqVGF5cjUyS2tiMiIsImlhdCI6MTc4NTA2MDI3MiwiZXhwIjoxNzg1MDYzODcyLCJlbWFpbCI6InBzcmloYXJpMjM4QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImFwcGxlLmNvbSI6WyIwMDA0ODguNzcwNDU1NTAyYjk4NGY1OWEyYjhiOWUwYzI0MDdmMTMuMDAwNiJdLCJnb29nbGUuY29tIjpbIjEwNzA0MDkyNzY4MjA3NTU0NDY4OSJdLCJlbWFpbCI6WyJwc3JpaGFyaTIzOEBnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.AcN0NHMkfG1IUD4mgXlMO-ASgUzHjgK4Iebg-qipAM6P_elwVN37jpNUJV0zihwjY41GaNg7LXuYy5BOwWEAxRSbSY2URuEPxsVZK4FvmzRQKyLR46JhgZRdGNZPKrp_93U_zNudD49oL_ObLDwnnxG7vl44dCmHhHtjya2pSRFjka2gbgLe77mNxvOZOHoKcfjdKpC7JmXxIxr48aq-nQXMRmHYzQMNrl1orTFVzo9VtNi9sKIRwuxoKyE1xm0RoaVVnBrwHKHPZw5d7lXdQhlzVTl3Yad845leOuWP2I00er5gtoZZRVGFTNVfNRPH6fnI_ReZ963D8wQ1fSDa3w";
+const FIREBASE_API_KEY = "AIzaSyADtP9ZTyPUIqk7T9xHvEuEXhe--IYYLWw";
+const REFRESH_TOKEN = "${REFRESH_TOKEN}";
 
-const default18Muscles = ["abductors", "abs", "adductors", "biceps", "calves", "chest", "forearms", "glutes", "hamstrings", "hipFlexors", "lats", "lowerBack", "obliques", "quads", "shoulders", "tibialisAnterior", "traps", "triceps"];
+async function refreshIdToken() {
+  console.log("🔄 Refreshing Firebase ID token via securetoken.googleapis.com...");
+  const res = await fetch(
+    \`https://securetoken.googleapis.com/v1/token?key=\${FIREBASE_API_KEY}\`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: \`grant_type=refresh_token&refresh_token=\${encodeURIComponent(REFRESH_TOKEN)}\`
+    }
+  );
+  
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(\`Token refresh failed: \${res.status} \${errText}\`);
+  }
+  
+  const data = await res.json();
+  console.log(\`✅ Fresh ID token minted! Expires in \${data.expires_in}s | User: \${data.user_id}\`);
+  return data.id_token;
+}
 
 async function run() {
   const now = new Date();
-  console.log("📡 Fetching Motra Muscle Recovery Telemetry...");
+  console.log("📡 Motra Muscle Recovery Sync - " + now.toISOString());
 
-  let responseData = {};
+  // Step 1: Get fresh ID token
+  const idToken = await refreshIdToken();
+
+  // Step 2: Fetch muscle recovery data
+  console.log("📡 Fetching muscle recovery from backend.motra.com...");
   let muscleStats = [];
+  let responseData = {};
 
   try {
     const res = await fetch("https://backend.motra.com/user/muscle-recovery", {
@@ -33,24 +78,25 @@ async function run() {
         "Content-Type": "application/json",
         "Accept": "*/*",
         "User-Agent": "Motra/1 CFNetwork/3892.100.1 Darwin/27.0.0",
-        "Authorization": \`Bearer \${MOTRA_TOKEN}\`,
+        "Authorization": \`Bearer \${idToken}\`,
         "Accept-Language": "en-IN,en;q=0.9"
       }
     });
 
     if (res.ok) {
       responseData = await res.json();
-      const data = responseData.data || {};
-      muscleStats = data.musclesRecoveryStats || [];
+      muscleStats = responseData.data?.musclesRecoveryStats || [];
+      console.log(\`✅ Motra API returned \${muscleStats.length} muscles\`);
     } else {
-      console.warn("⚠️ Motra API returned status:", res.status);
+      console.error("⚠️ Motra API status:", res.status, await res.text());
     }
   } catch (err) {
     console.error("⚠️ Motra fetch error:", err.message);
   }
 
-  let sumPct = 0;
+  // Step 3: Build Firestore payload
   const musclesMapFields = {};
+  let sumPct = 0;
 
   if (muscleStats.length > 0) {
     muscleStats.forEach(m => {
@@ -58,40 +104,37 @@ async function run() {
       musclesMapFields[m.muscle] = {
         mapValue: {
           fields: {
-            recovery: { integerValue: m.recovery ?? 100 },
-            daysToRecovery: { integerValue: m.daysToRecovery ?? 0 },
-            daysSinceLastUsed: m.daysSinceLastUsed != null ? { integerValue: m.daysSinceLastUsed } : { nullValue: null }
+            recovery: { integerValue: String(m.recovery ?? 100) },
+            daysToRecovery: { integerValue: String(m.daysToRecovery ?? 0) },
+            daysSinceLastUsed: m.daysSinceLastUsed != null 
+              ? { integerValue: String(m.daysSinceLastUsed) } 
+              : { nullValue: null }
           }
         }
       };
     });
   } else {
-    // Populate default 18 muscles map if API is offline or 403
-    default18Muscles.forEach(m => {
+    // Fallback: populate default 18 muscles
+    const defaults = ["abductors","abs","adductors","biceps","calves","chest","forearms","glutes","hamstrings","hipFlexors","lats","lowerBack","obliques","quads","shoulders","tibialisAnterior","traps","triceps"];
+    defaults.forEach(m => {
       musclesMapFields[m] = {
-        mapValue: {
-          fields: {
-            recovery: { integerValue: 100 },
-            daysToRecovery: { integerValue: 0 },
-            daysSinceLastUsed: { nullValue: null }
-          }
-        }
+        mapValue: { fields: { recovery: { integerValue: "100" }, daysToRecovery: { integerValue: "0" }, daysSinceLastUsed: { nullValue: null } } }
       };
     });
   }
 
-  const avgRecoveryPct = muscleStats.length > 0 ? (sumPct / muscleStats.length).toFixed(0) : "100";
+  const avgPct = muscleStats.length > 0 ? (sumPct / muscleStats.length).toFixed(0) : "100";
   const dataObj = responseData.data || {};
 
-  console.log(\`📊 Motra Recovery Summary -> Overall: \${avgRecoveryPct}% | Recovered: \${dataObj.recoveredMuscles || 18}/18 | Total Muscles: \${Object.keys(musclesMapFields).length}\`);
+  console.log(\`📊 Overall: \${avgPct}% | Recovered: \${dataObj.recoveredMuscles || 18}/18 | Muscles: \${Object.keys(musclesMapFields).length}\`);
 
-  // Direct Firestore REST API Update
+  // Step 4: Write to Firestore via REST API
   const firestoreUrl = "https://firestore.googleapis.com/v1/projects/epaper-api-key/databases/(default)/documents/api_feeds/motra_metrics";
   
   const patchData = {
     fields: {
       apiName: { stringValue: "MOTRA" },
-      source: { stringValue: "Motra Worker" },
+      source: { stringValue: "Motra Worker (Auto-Refresh)" },
       timestamp: { timestampValue: now.toISOString() },
       status: { stringValue: "success" },
       payload: {
@@ -101,10 +144,10 @@ async function run() {
             summary: {
               mapValue: {
                 fields: {
-                  overallRecoveryPct: { stringValue: \`\${avgRecoveryPct}%\` },
+                  overallRecoveryPct: { stringValue: \`\${avgPct}%\` },
                   recoveredMuscles: { stringValue: \`\${dataObj.recoveredMuscles || 18}/18\` },
-                  recoveringMuscles: { integerValue: dataObj.recoveringMuscles || 0 },
-                  daysSinceLastWorkout: { integerValue: dataObj.daysSinceLastWorkout || 245 }
+                  recoveringMuscles: { integerValue: String(dataObj.recoveringMuscles || 0) },
+                  daysSinceLastWorkout: { integerValue: String(dataObj.daysSinceLastWorkout || 245) }
                 }
               }
             },
@@ -126,23 +169,21 @@ async function run() {
   });
 
   if (fsRes.ok) {
-    console.log("✅ Successfully updated Firestore document 'api_feeds/motra_metrics'");
+    console.log("✅ Firestore updated: api_feeds/motra_metrics");
   } else {
-    const errText = await fsRes.text();
-    console.error("❌ Firestore API Error:", fsRes.status, errText);
+    console.error("❌ Firestore error:", fsRes.status, await fsRes.text());
     process.exit(1);
   }
 }
 
 run().catch(err => {
-  console.error("❌ Execution Error:", err);
+  console.error("❌ Fatal:", err);
   process.exit(1);
 });
 `;
 
 async function setupCronicleMotraJob() {
   const updateUrl = `${CRONICLE_URL}/api/app/update_event/v1?api_key=${CRONICLE_API_KEY}`;
-  const createUrl = `${CRONICLE_URL}/api/app/create_event/v1?api_key=${CRONICLE_API_KEY}`;
 
   const eventPayload = {
     id: "ems1n964g1f",
@@ -159,21 +200,20 @@ async function setupCronicleMotraJob() {
     params: {
       script: inlineScriptContent
     },
-    notes: "Self-contained inline script fetching Motra Muscle Recovery telemetry for all 18 muscles."
+    notes: "Self-refreshing auth: uses Firebase refresh token to mint fresh ID tokens every run. Never expires."
   };
 
-  console.log(`📡 Updating Cronicle event 'ems1n964g1f' on ${CRONICLE_URL}...`);
+  console.log(`\n📡 Pushing to Cronicle (${CRONICLE_URL})...`);
 
   try {
     const response = await axios.post(updateUrl, eventPayload);
     if (response.data.code === 0) {
-      console.log(`✅ Cronicle Motra Event updated successfully!`);
+      console.log(`✅ Cronicle Motra event updated with auto-refresh auth!`);
     } else {
-      const createRes = await axios.post(createUrl, eventPayload);
-      console.log(`✅ Cronicle Motra Event response:`, createRes.data);
+      console.log(`⚠️ Response:`, response.data);
     }
   } catch (error) {
-    console.error(`❌ Cronicle setup error:`, error.response ? error.response.data : error.message);
+    console.error(`❌ Cronicle error:`, error.response ? error.response.data : error.message);
   }
 }
 
