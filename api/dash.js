@@ -126,24 +126,37 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. EXAMS
+    // 2. EXAMS (Only show the single next upcoming exam based on date)
     const examsSnap = await db.collection('api_feeds').doc('exams_schedule').get();
     if (examsSnap.exists) {
       const examsPayload = examsSnap.data().payload || {};
       const allExams = examsPayload.exams || [];
 
-      const formattedExams = allExams.map(ex => {
-        const isToday = ex.date && ex.date.includes(todayIsoDate);
-        return {
-          subject: ex.subject,
-          date: isToday ? "Today" : ex.date
-        };
-      });
+      // Filter upcoming (date >= today), or fall back to all if all past
+      const validExams = allExams.filter(ex => ex.date && ex.date >= todayIsoDate);
+      const sortedExams = (validExams.length > 0 ? validExams : allExams)
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-      dashData.exams = {
-        total_upcoming: formattedExams.length,
-        upcoming_exams: formattedExams
-      };
+      if (sortedExams.length > 0) {
+        const next = sortedExams[0];
+        const isToday = next.date && next.date.includes(todayIsoDate);
+        const formattedNext = {
+          subject: next.subject,
+          date: isToday ? "Today" : next.date
+        };
+
+        dashData.exams = {
+          total_upcoming: validExams.length,
+          next_exam: formattedNext,
+          upcoming_exams: [formattedNext]
+        };
+      } else {
+        dashData.exams = {
+          total_upcoming: 0,
+          next_exam: null,
+          upcoming_exams: []
+        };
+      }
     }
 
     // 3. AC POWER

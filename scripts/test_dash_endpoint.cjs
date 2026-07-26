@@ -63,10 +63,24 @@ async function testDashEndpoint() {
 
   const examsPayload = examsSnap.exists ? examsSnap.data().payload : {};
   const allExams = examsPayload.exams || [];
-  const formattedExams = allExams.map(ex => ({
-    subject: ex.subject,
-    date: (ex.date && ex.date.includes(todayIsoDate)) ? "Today" : ex.date
-  }));
+  const validExams = allExams.filter(ex => ex.date && ex.date >= todayIsoDate);
+  const sortedExams = (validExams.length > 0 ? validExams : allExams)
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  let examsResult = { total_upcoming: 0, next_exam: null, upcoming_exams: [] };
+  if (sortedExams.length > 0) {
+    const next = sortedExams[0];
+    const isToday = next.date && next.date.includes(todayIsoDate);
+    const formattedNext = {
+      subject: next.subject,
+      date: isToday ? "Today" : next.date
+    };
+    examsResult = {
+      total_upcoming: validExams.length,
+      next_exam: formattedNext,
+      upcoming_exams: [formattedNext]
+    };
+  }
 
   const acSummary = acSnap.exists ? acSnap.data().payload?.summary || {} : {};
   const aiSummary = aiSnap.exists ? aiSnap.data().payload?.summary || {} : {};
@@ -111,10 +125,7 @@ async function testDashEndpoint() {
   const dashResult = {
     timestamp: new Date().toISOString(),
     class_schedule: classWidget,
-    exams: {
-      total_upcoming: formattedExams.length,
-      upcoming_exams: formattedExams
-    },
+    exams: examsResult,
     ac_power: {
       today_kwh: String(acSummary.todayKwh || "6.84"),
       week_kwh: String(acSummary.thisWeekKwh || "6.84"),
