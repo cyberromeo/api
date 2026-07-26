@@ -1,6 +1,6 @@
 /**
  * Vercel Serverless API Endpoint for Class Schedule
- * GET /api/class-schedule  -> Returns class schedule (Only subject and date)
+ * GET /api/class-schedule  -> Returns class schedule (subject, start_date, end_date)
  * POST /api/class-schedule -> Pushes/updates class schedule (Used by Hermes Agent)
  */
 
@@ -32,13 +32,14 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
-      const classes = Array.isArray(body.classes) ? body.classes : (body.data || body.schedule || []);
+      const classes = Array.isArray(body.classes) ? body.classes : (body.data || body.schedule || [body]);
 
       const payload = {
         total_classes: classes.length,
         classes: classes.map((c) => ({
-          subject: c.subject || c.name || c.title || "Class",
-          date: c.date || c.time || new Date().toISOString().split('T')[0]
+          subject: c.subject || c.name || c.title || "Subject",
+          start_date: c.start_date || c.date || new Date().toISOString().split('T')[0],
+          end_date: c.end_date || c.start_date || c.date || new Date().toISOString().split('T')[0]
         })),
         updated_at: new Date().toISOString()
       };
@@ -65,7 +66,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // --- GET /api/class-schedule (Fetched by E-Paper Screen / Clients) ---
+  // --- GET /api/class-schedule (Fetched by Clients) ---
   try {
     let payloadData = {
       total_classes: 0,
@@ -84,7 +85,8 @@ export default async function handler(req, res) {
           total_classes: payload.total_classes ?? (payload.classes || []).length,
           classes: (payload.classes || []).map(c => ({
             subject: c.subject,
-            date: c.date
+            start_date: c.start_date,
+            end_date: c.end_date
           })),
           updated_at: docData.timestamp?.toDate 
             ? docData.timestamp.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })

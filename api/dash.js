@@ -3,7 +3,7 @@
  * GET /api/dash
  * 
  * Clean JSON payload for E-Paper Screen:
- * 1. class_schedule: Today's classes or "no class today"
+ * 1. class_schedule: Today's class (filtered via start_date & end_date) or "no class today"
  * 2. exams: Upcoming exams ("Today" badge if scheduled on current date)
  * 3. ac_power: Today, Week, Month kWh
  * 4. ai_usage: 5h, Weekly, Monthly limits & reset times
@@ -117,24 +117,27 @@ export default async function handler(req, res) {
     if (getApps().length) {
       const db = getFirestore();
 
-      // 1. CLASS SCHEDULE
+      // 1. CLASS SCHEDULE (Check if today fall between start_date and end_date)
       const classSnap = await db.collection('api_feeds').doc('class_schedule').get();
       if (classSnap.exists) {
         const classPayload = classSnap.data().payload || {};
         const allClasses = classPayload.classes || [];
         
-        const todayClasses = allClasses.filter(c => {
-          if (!c.date) return true;
-          return c.date.includes(todayIsoDate);
+        const activeTodayClasses = allClasses.filter(c => {
+          const s = c.start_date || c.date;
+          const e = c.end_date || s;
+          if (!s) return true;
+          return s <= todayIsoDate && todayIsoDate <= e;
         });
 
-        if (todayClasses.length > 0) {
+        if (activeTodayClasses.length > 0) {
           dashData.class_schedule = {
-            status: `${todayClasses.length} class(es) scheduled`,
+            status: `${activeTodayClasses.length} class(es) scheduled`,
             date: todayIsoDate,
-            classes: todayClasses.map(c => ({
+            classes: activeTodayClasses.map(c => ({
               subject: c.subject,
-              date: c.date
+              start_date: c.start_date,
+              end_date: c.end_date
             }))
           };
         } else {
