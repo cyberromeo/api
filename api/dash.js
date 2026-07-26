@@ -2,15 +2,15 @@
  * Vercel Serverless Master Endpoint for E-Paper Hardware Display
  * GET /api/dash
  * 
- * Consolidates all E-Paper widgets into a single optimized payload:
- * 1. Class Schedule: Today's class or "no class today"
- * 2. Exams: Upcoming exams with "Today" badge if scheduled on current date
- * 3. AC Power: Today, Week, Month kWh
- * 4. AI Usage: 5h, Weekly, Monthly limits & reset times
- * 5. Todoist Tasks: Filtered for today + overdue, separated into 'tasks' and 'shopping_list' with priority & completion
- * 6. MedX Tracker: Overall completion % out of 121 items
- * 7. MedX Study Time: Study time /11hrs and PYQ time /2hrs
- * 8. Motra Fitness: Overall recovery & all 18 individual muscles recovery stats
+ * Clean JSON payload for E-Paper Screen:
+ * 1. class_schedule: Today's classes or "no class today"
+ * 2. exams: Upcoming exams ("Today" badge if scheduled on current date)
+ * 3. ac_power: Today, Week, Month kWh
+ * 4. ai_usage: 5h, Weekly, Monthly limits & reset times
+ * 5. todoist: Separated into 'tasks' and 'shopping_list' with priority, overdue & completion
+ * 6. medx_tracker: Overall completion % out of 121 items
+ * 7. medx_studytime: Study time /11hrs and PYQ time /2hrs
+ * 8. motra: Overall recovery & all 18 individual muscles recovery stats
  */
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -39,7 +39,6 @@ export default async function handler(req, res) {
   const todayIsoDate = new Date().toISOString().split('T')[0];
 
   try {
-    // Default Fallback Payload Structure
     const defaultMusclesMap = {
       abductors: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
       abs: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null },
@@ -61,70 +60,57 @@ export default async function handler(req, res) {
       triceps: { recovery: 100, daysToRecovery: 0, daysSinceLastUsed: null }
     };
 
-    const responsePayload = {
-      status: "success",
-      endpoint: "/api/dash",
-      epaper_display: "Universal E-Paper Dashboard",
+    const dashData = {
       timestamp: new Date().toISOString(),
-      data: {
-        class_schedule: {
-          status: "no class today",
-          date: todayIsoDate,
-          classes: []
-        },
-        exams: {
-          total_upcoming: 2,
-          upcoming_exams: [
-            { subject: "Pathology Midterm Exam", date: "Today", is_today: true },
-            { subject: "FMGE July Grand Test", date: "2026-08-15", is_today: false }
-          ]
-        },
-        ac_power: {
-          today_kwh: "5.08",
-          week_kwh: "5.08",
-          month_kwh: "80.76",
-          unit: "kWh"
-        },
-        ai_usage: {
-          rolling_5h: "0%",
-          rolling_reset: "25 mins",
-          weekly_usage: "22%",
-          weekly_reset: "16 hours 50 mins",
-          monthly_usage: "68%",
-          monthly_reset: "12 days 8 hours"
-        },
-        todoist: {
-          total_pending: 3,
-          tasks: [
-            { content: "Buy specs 👓", due: "this Sunday evening", priority: 1, is_overdue: true, completed: false },
-            { content: "Book psychiatrist appointment", due: "2026-07-10", priority: 3, is_overdue: true, completed: false }
-          ],
-          shopping_list: [
-            { content: "Whey protein", due: "No due date", priority: 1, is_overdue: false, completed: false }
-          ]
-        },
-        medx_tracker: {
-          completion_percentage: "0.0%",
-          items_progress: "0/121",
-          completed_items: 0,
-          total_items: 121
-        },
-        medx_studytime: {
-          study_hours: "0.00",
-          study_goal: "11 hrs",
-          study_progress: "0.00/11 hrs",
-          pyq_hours: "0.00",
-          pyq_goal: "2 hrs",
-          pyq_progress: "0.00/2 hrs",
-          streak_days: 0
-        },
-        motra: {
-          overall_recovery: "100%",
-          recovered_muscles: "18/18",
-          recovering_muscles: 0,
-          days_since_workout: 245,
-          muscles: defaultMusclesMap
-        }
+      class_schedule: {
+        status: "no class today",
+        date: todayIsoDate,
+        classes: []
+      },
+      exams: {
+        total_upcoming: 0,
+        upcoming_exams: []
+      },
+      ac_power: {
+        today_kwh: "0.00",
+        week_kwh: "0.00",
+        month_kwh: "0.00",
+        unit: "kWh"
+      },
+      ai_usage: {
+        rolling_5h: "0%",
+        rolling_reset: "N/A",
+        weekly_usage: "0%",
+        weekly_reset: "N/A",
+        monthly_usage: "0%",
+        monthly_reset: "N/A"
+      },
+      todoist: {
+        total_pending: 0,
+        tasks: [],
+        shopping_list: []
+      },
+      medx_tracker: {
+        completion_percentage: "0.0%",
+        items_progress: "0/121",
+        completed_items: 0,
+        total_items: 121
+      },
+      medx_studytime: {
+        study_hours: "0.00",
+        study_goal: "11 hrs",
+        study_progress: "0.00/11 hrs",
+        pyq_hours: "0.00",
+        pyq_goal: "2 hrs",
+        pyq_progress: "0.00/2 hrs",
+        streak_days: 0
+      },
+      motra: {
+        overall_recovery: "100%",
+        recovered_muscles: "18/18",
+        recovering_muscles: 0,
+        days_since_workout: 245,
+        muscles: defaultMusclesMap
       }
     };
 
@@ -137,14 +123,13 @@ export default async function handler(req, res) {
         const classPayload = classSnap.data().payload || {};
         const allClasses = classPayload.classes || [];
         
-        // Filter classes scheduled for today or matching date
         const todayClasses = allClasses.filter(c => {
-          if (!c.date) return true; // default include
+          if (!c.date) return true;
           return c.date.includes(todayIsoDate);
         });
 
         if (todayClasses.length > 0) {
-          responsePayload.data.class_schedule = {
+          dashData.class_schedule = {
             status: `${todayClasses.length} class(es) scheduled`,
             date: todayIsoDate,
             classes: todayClasses.map(c => ({
@@ -153,7 +138,7 @@ export default async function handler(req, res) {
             }))
           };
         } else {
-          responsePayload.data.class_schedule = {
+          dashData.class_schedule = {
             status: "no class today",
             date: todayIsoDate,
             classes: []
@@ -171,12 +156,11 @@ export default async function handler(req, res) {
           const isToday = ex.date && ex.date.includes(todayIsoDate);
           return {
             subject: ex.subject,
-            date: isToday ? "Today" : ex.date,
-            is_today: Boolean(isToday)
+            date: isToday ? "Today" : ex.date
           };
         });
 
-        responsePayload.data.exams = {
+        dashData.exams = {
           total_upcoming: formattedExams.length,
           upcoming_exams: formattedExams
         };
@@ -186,7 +170,7 @@ export default async function handler(req, res) {
       const acSnap = await db.collection('api_feeds').doc('ac_power_metrics').get();
       if (acSnap.exists) {
         const summary = acSnap.data().payload?.summary || {};
-        responsePayload.data.ac_power = {
+        dashData.ac_power = {
           today_kwh: String(summary.todayKwh ?? "0.00"),
           week_kwh: String(summary.thisWeekKwh ?? "0.00"),
           month_kwh: String(summary.thisMonthKwh ?? "0.00"),
@@ -198,7 +182,7 @@ export default async function handler(req, res) {
       const aiSnap = await db.collection('api_feeds').doc('ai_usage_metrics').get();
       if (aiSnap.exists) {
         const summary = aiSnap.data().payload?.summary || {};
-        responsePayload.data.ai_usage = {
+        dashData.ai_usage = {
           rolling_5h: `${summary.rolling?.percentage ?? 0}%`,
           rolling_reset: summary.rolling?.resetIn || "N/A",
           weekly_usage: `${summary.weekly?.percentage ?? 0}%`,
@@ -208,7 +192,7 @@ export default async function handler(req, res) {
         };
       }
 
-      // 5. TODOIST (Tasks vs Shopping List)
+      // 5. TODOIST
       const todoistSnap = await db.collection('api_feeds').doc('todoist_metrics').get();
       if (todoistSnap.exists) {
         const payload = todoistSnap.data().payload || {};
@@ -242,7 +226,7 @@ export default async function handler(req, res) {
           }
         });
 
-        responsePayload.data.todoist = {
+        dashData.todoist = {
           total_pending: rawTasks.length,
           tasks: tasksArr,
           shopping_list: shoppingArr
@@ -253,11 +237,11 @@ export default async function handler(req, res) {
       const trackerSnap = await db.collection('api_feeds').doc('medx_tracker').get();
       if (trackerSnap.exists) {
         const summary = trackerSnap.data().payload?.summary || {};
-        responsePayload.data.medx_tracker = {
+        dashData.medx_tracker = {
           completion_percentage: summary.completionPercentage || "0.0%",
-          items_progress: `${summary.completedItems || 0}/${summary.totalItems || 121}`,
+          items_progress: `${summary.completedItems || 0}/121`,
           completed_items: summary.completedItems || 0,
-          total_items: summary.totalItems || 121
+          total_items: 121
         };
       }
 
@@ -268,7 +252,7 @@ export default async function handler(req, res) {
         const studyHrs = summary.todayStudyHours || "0.00";
         const pyqHrs = summary.todayPyqHours || "0.00";
 
-        responsePayload.data.medx_studytime = {
+        dashData.medx_studytime = {
           study_hours: studyHrs,
           study_goal: "11 hrs",
           study_progress: `${studyHrs}/11 hrs`,
@@ -279,13 +263,13 @@ export default async function handler(req, res) {
         };
       }
 
-      // 8. MOTRA MUSCLE RECOVERY (All 18 Muscles)
+      // 8. MOTRA MUSCLE RECOVERY
       const motraSnap = await db.collection('api_feeds').doc('motra_metrics').get();
       if (motraSnap.exists) {
         const summary = motraSnap.data().payload?.summary || {};
         const musclesMap = motraSnap.data().payload?.musclesMap || defaultMusclesMap;
 
-        responsePayload.data.motra = {
+        dashData.motra = {
           overall_recovery: summary.overallRecoveryPct || "100%",
           recovered_muscles: summary.recoveredMuscles || "18/18",
           recovering_muscles: summary.recoveringMuscles ?? 0,
@@ -295,9 +279,9 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json(responsePayload);
+    return res.status(200).json(dashData);
   } catch (error) {
     console.error("GET /api/dash error:", error);
-    return res.status(500).json({ status: "error", message: error.message });
+    return res.status(500).json({ error: error.message });
   }
 }
