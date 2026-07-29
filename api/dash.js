@@ -126,13 +126,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. EXAMS (Only show the single next upcoming exam based on date)
+    // 2. EXAMS
     const examsSnap = await db.collection('api_feeds').doc('exams_schedule').get();
     if (examsSnap.exists) {
       const examsPayload = examsSnap.data().payload || {};
       const allExams = examsPayload.exams || [];
 
-      // Filter upcoming (date >= today), or fall back to all if all past
       const validExams = allExams.filter(ex => ex.date && ex.date >= todayIsoDate);
       const sortedExams = (validExams.length > 0 ? validExams : allExams)
         .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -256,7 +255,7 @@ export default async function handler(req, res) {
       };
     }
 
-    // 8. MOTRA MUSCLE RECOVERY (Ensure ALL 18 muscles are populated)
+    // 8. MOTRA MUSCLE RECOVERY
     const motraSnap = await db.collection('api_feeds').doc('motra_metrics').get();
     if (motraSnap.exists) {
       const summary = motraSnap.data().payload?.summary || {};

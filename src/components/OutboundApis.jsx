@@ -5,10 +5,10 @@ const OUTBOUND_ENDPOINTS = [
   {
     name: 'GET /api/dash',
     badge: 'PRIMARY E-PAPER ENDPOINT',
-    description: 'Universal aggregated payload containing class schedule, next exam, AC power, AI usage, Todoist, MedX tracker/study time, and Motra 18 muscles.',
+    description: 'Universal aggregated payload containing class schedule, next exam, AC power, AI usage, Todoist, MedX tracker/study time, Motra 18 muscles, and Question of the Day.',
     consumer: 'Universal E-Paper Display Hardware',
     responseExample: `{
-  "timestamp": "2026-07-26T14:28:07.919Z",
+  "timestamp": "2026-07-29T14:28:07.919Z",
   "class_schedule": { "status": "no class today", "classes": [] },
   "exams": { "total_upcoming": 2, "next_exam": { "subject": "Pharmacology Exam", "date": "2026-07-27" } },
   "ac_power": { "today_kwh": "6.84", "week_kwh": "6.84", "month_kwh": "82.52" },
@@ -16,7 +16,29 @@ const OUTBOUND_ENDPOINTS = [
   "todoist": { "total_pending": 3, "tasks": [...], "shopping_list": [...] },
   "medx_tracker": { "completion_percentage": "0.0%", "items_progress": "0/121" },
   "medx_studytime": { "study_progress": "0.00/11 hrs", "pyq_progress": "0.00/2 hrs" },
-  "motra": { "overall_recovery": "100%", "recovered_muscles": "18/18", "muscles": { "abductors": {...}, ... } }
+  "motra": { "overall_recovery": "100%", "recovered_muscles": "18/18", "muscles": { ... } },
+  "qod": { "question": "Which cellular change...", "subject": "Pathology", ... }
+}`
+  },
+  {
+    name: 'GET /api/qod',
+    badge: 'QUESTION OF THE DAY API',
+    description: 'Returns the daily question, subject, options, correct answer, and detailed explanation fetched automatically from Arise Medical Academy.',
+    consumer: 'Study App / E-Paper Display / Widgets',
+    responseExample: `{
+  "status": "success",
+  "provider": "Arise Medical Academy",
+  "data": {
+    "questionId": 1110,
+    "subject": "Pathology",
+    "plainQuestion": "Which cellular change is associated with irreversible cell damage?",
+    "ansExplanation": "<p><strong>Correct Answer: A</strong>...</p>",
+    "answers": [
+      { "answerId": 4437, "answer": "Pyknosis", "correct": true },
+      { "answerId": 4438, "answer": "Myelin figures", "correct": false }
+    ],
+    "fetchedAt": "2026-07-29T14:58:00.000Z"
+  }
 }`
   },
   {
