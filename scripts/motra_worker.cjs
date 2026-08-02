@@ -1,105 +1,97 @@
 /**
- * Cronicle Worker Script: Motra Muscle Recovery Fetcher
- * Target: https://backend.motra.com/user/muscle-recovery
- * Schedule: Runs every 30 minutes in Cronicle Docker
- * Target Firebase DB: epaper-api-key -> Collection: 'api_feeds' -> Document: 'motra_metrics'
+ * Cronicle Worker Script: Motra Full Gym Sync
+ *
+ * Pulls the complete gym dataset from backend.motra.com — weekly stats,
+ * workouts, muscle groups, streak, leaderboard, PRs, and muscle recovery —
+ * and writes it to Firestore: api_feeds/motra_metrics
+ *
+ * Auth is self-refreshing: a long-lived Firebase refresh token mints a fresh
+ * 60-minute ID token on every run, so this never needs re-authentication.
+ *
+ * Run locally:  node scripts/motra_worker.cjs
+ *               node scripts/motra_worker.cjs --dry-run   (fetch only, no write)
  */
 
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const axios = require('axios');
+const fs = require('fs');
 const path = require('path');
 
-const MOTRA_TOKEN = process.env.MOTRA_TOKEN || "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE2ZWUwMzFlODZhM2YwZmNkOWI2ZDcwMDJiMDJiMDg2ZDJmNTVkZTQiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiU1JJSEFSSSBQUkFCQUtBUkFOIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0pnMWR3LV9SbGZLbG4zLUhTM21UbUJDTHFiVU11OVRuRW8wNENZcWtCc3pfQkQydEk0PXM5Ni1jIiwiaXNzIjoiaHR0cHM6Ly9zZWN1cmV0b2tlbi5nb29nbGUuY29tL3RyYWluLTE2NWQzIiwiYXVkIjoidHJhaW4tMTY1ZDMiLCJhdXRoX3RpbWUiOjE3NzgyMjk4MzAsInVzZXJfaWQiOiI3dTRHTFRrV2ZJTXBqSjhHd2pUYXlyNTJLa2IyIiwic3ViIjoiN3U0R0xUa1dmSU1wako4R3dqVGF5cjUyS2tiMiIsImlhdCI6MTc4NTA2MDI3MiwiZXhwIjoxNzg1MDYzODcyLCJlbWFpbCI6InBzcmloYXJpMjM4QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7ImFwcGxlLmNvbSI6WyIwMDA0ODguNzcwNDU1NTAyYjk4NGY1OWEyYjhiOWUwYzI0MDdmMTMuMDAwNiJdLCJnb29nbGUuY29tIjpbIjEwNzA0MDkyNzY4MjA3NTU0NDY4OSJdLCJlbWFpbCI6WyJwc3JpaGFyaTIzOEBnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.AcN0NHMkfG1IUD4mgXlMO-ASgUzHjgK4Iebg-qipAM6P_elwVN37jpNUJV0zihwjY41GaNg7LXuYy5BOwWEAxRSbSY2URuEPxsVZK4FvmzRQKyLR46JhgZRdGNZPKrp_93U_zNudD49oL_ObLDwnnxG7vl44dCmHhHtjya2pSRFjka2gbgLe77mNxvOZOHoKcfjdKpC7JmXxIxr48aq-nQXMRmHYzQMNrl1orTFVzo9VtNi9sKIRwuxoKyE1xm0RoaVVnBrwHKHPZw5d7lXdQhlzVTl3Yad845leOuWP2I00er5gtoZZRVGFTNVfNRPH6fnI_ReZ963D8wQ1fSDa3w";
-const SERVICE_ACCOUNT_FILE = process.env.FIREBASE_SERVICE_ACCOUNT || '../epaper-api-key-firebase-adminsdk-fbsvc-14ee0d69d4.json';
+const { mintIdToken, fetchAllGymData, logPayloadSummary } = require('./motra_fetch_core.cjs');
 
-// Initialize Firebase Admin
-if (!getApps().length) {
+const DRY_RUN = process.argv.includes('--dry-run');
+const REFRESH_TOKEN_FILE = path.resolve(__dirname, '..', '.motra_refresh_token');
+const SERVICE_ACCOUNT_FILE =
+  process.env.FIREBASE_SERVICE_ACCOUNT ||
+  '../epaper-api-key-firebase-adminsdk-fbsvc-14ee0d69d4.json';
+
+function loadRefreshToken() {
+  if (process.env.MOTRA_REFRESH_TOKEN) return process.env.MOTRA_REFRESH_TOKEN.trim();
+  if (fs.existsSync(REFRESH_TOKEN_FILE)) return fs.readFileSync(REFRESH_TOKEN_FILE, 'utf8').trim();
+  throw new Error(
+    'No Motra refresh token. Set MOTRA_REFRESH_TOKEN or create .motra_refresh_token'
+  );
+}
+
+function initFirebase() {
+  if (getApps().length) return true;
   try {
-    const serviceAccountPath = path.resolve(__dirname, SERVICE_ACCOUNT_FILE);
-    const serviceAccount = require(serviceAccountPath);
+    const serviceAccount = require(path.resolve(__dirname, SERVICE_ACCOUNT_FILE));
     initializeApp({ credential: cert(serviceAccount) });
-    console.log("⚡ Firebase Admin initialized");
+    console.log('⚡ Firebase Admin initialized');
+    return true;
   } catch (err) {
-    console.error("❌ Failed to load Firebase Service Account:", err.message);
-    process.exit(1);
+    console.error('❌ Failed to load Firebase service account:', err.message);
+    return false;
   }
 }
 
-const db = getFirestore();
+async function main() {
+  console.log(`📡 Motra Full Gym Sync — ${new Date().toISOString()}`);
 
-async function fetchMotraData() {
-  const now = new Date();
-  console.log("📡 Fetching Motra Muscle Recovery Telemetry...");
+  // 1. fresh ID token
+  const refreshToken = loadRefreshToken();
+  const tokens = await mintIdToken(refreshToken);
+  console.log(`🔑 ID token minted for user ${tokens.userId}`);
 
-  try {
-    const response = await axios.get("https://backend.motra.com/user/muscle-recovery", {
-      headers: {
-        "Host": "backend.motra.com",
-        "Content-Type": "application/json",
-        "Accept": "*/*",
-        "User-Agent": "Motra/1 CFNetwork/3892.100.1 Darwin/27.0.0",
-        "Authorization": `Bearer ${MOTRA_TOKEN}`,
-        "Accept-Language": "en-IN,en;q=0.9"
-      }
-    });
+  // Firebase occasionally rotates the refresh token — persist it if so
+  if (tokens.refreshToken && tokens.refreshToken !== refreshToken) {
+    fs.writeFileSync(REFRESH_TOKEN_FILE, tokens.refreshToken);
+    console.log('🔁 Refresh token rotated and saved');
+  }
 
-    const data = response.data?.data || {};
-    const muscleStats = data.musclesRecoveryStats || [];
-    
-    // Build map of all 18 muscles
-    const musclesMap = {};
-    muscleStats.forEach(m => {
-      musclesMap[m.muscle] = {
-        recovery: m.recovery ?? 100,
-        daysToRecovery: m.daysToRecovery ?? 0,
-        daysSinceLastUsed: m.daysSinceLastUsed ?? null
-      };
-    });
+  // 2. pull everything
+  const payload = await fetchAllGymData(tokens.idToken);
+  logPayloadSummary(payload);
 
-    // Calculate average recovery %
-    let sumPct = 0;
-    muscleStats.forEach(m => { sumPct += (m.recovery || 0); });
-    const avgRecoveryPct = muscleStats.length > 0 ? (sumPct / muscleStats.length).toFixed(0) : "100";
+  if (!payload.meta.endpointsOk.length) {
+    throw new Error('All Motra endpoints failed — refusing to overwrite Firestore');
+  }
 
-    const payload = {
-      lastUpdated: now.toISOString(),
-      summary: {
-        overallRecoveryPct: `${avgRecoveryPct}%`,
-        recoveredMuscles: `${data.recoveredMuscles || muscleStats.length}/${muscleStats.length}`,
-        recoveringMuscles: data.recoveringMuscles || 0,
-        daysSinceLastWorkout: data.daysSinceLastWorkout || 0,
-        totalMusclesTracked: muscleStats.length
-      },
-      musclesMap: musclesMap,
-      musclesList: muscleStats.map(m => ({
-        muscle: m.muscle,
-        recovery: m.recovery,
-        daysToRecovery: m.daysToRecovery,
-        daysSinceLastUsed: m.daysSinceLastUsed
-      }))
-    };
+  if (DRY_RUN) {
+    console.log('\n🧪 --dry-run: skipping Firestore write');
+    console.log(JSON.stringify(payload, null, 2));
+    return;
+  }
 
-    console.log("📊 Parsed Motra Telemetry for All 18 Muscles:");
-    console.log(`   - Overall Recovery: ${payload.summary.overallRecoveryPct}`);
-    console.log(`   - Recovered: ${payload.summary.recoveredMuscles} | Recovering: ${payload.summary.recoveringMuscles}`);
-    console.log(`   - 18 Individual Muscles Processed:`, Object.keys(musclesMap).join(", "));
-
-    // OVERWRITE/UPDATE canonical document 'motra_metrics' in Firestore
-    await db.collection('api_feeds').doc('motra_metrics').set({
+  // 3. write to Firestore
+  if (!initFirebase()) process.exit(1);
+  const db = getFirestore();
+  await db.collection('api_feeds').doc('motra_metrics').set(
+    {
       apiName: 'MOTRA',
-      source: 'Motra Fitness API',
+      source: 'Motra Fitness API (full gym sync)',
       timestamp: FieldValue.serverTimestamp(),
       status: 'success',
-      payload: payload
-    }, { merge: true });
+      payload: payload,
+    },
+    { merge: true }
+  );
 
-    console.log("✅ Successfully updated canonical Firestore document: 'api_feeds/motra_metrics'");
-    process.exit(0);
-  } catch (error) {
-    console.error("❌ Motra API Error:", error.response ? error.response.status + " " + JSON.stringify(error.response.data) : error.message);
-    process.exit(1);
-  }
+  console.log("✅ Firestore updated: api_feeds/motra_metrics");
 }
 
-fetchMotraData();
+main().catch((err) => {
+  console.error('❌ Motra sync failed:', err.message);
+  process.exit(1);
+});

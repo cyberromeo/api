@@ -87,8 +87,22 @@ export default async function handler(req, res) {
         overall_recovery: "100%",
         recovered_muscles: "18/18",
         recovering_muscles: 0,
-        days_since_workout: 245,
-        muscles: defaultMusclesMap
+        days_since_workout: 0,
+        muscles: defaultMusclesMap,
+        streak_days: 0,
+        lifetime_workouts: 0,
+        last_workout: null,
+        week_days_trained: 0,
+        week_workouts: 0,
+        week_duration: "0m",
+        week_volume_kg: 0,
+        week_sets: 0,
+        week_reps: 0,
+        week_calories: 0,
+        week_days: [],
+        leaderboard_rank: null,
+        muscle_groups: [],
+        recent_workouts: []
       }
     };
 
@@ -272,12 +286,57 @@ export default async function handler(req, res) {
         }
       });
 
+      const motraPayload = motraSnap.data().payload || {};
+      const week = motraPayload.weeklyStats || {};
+      const ov = motraPayload.overallStats || {};
+
       dashData.motra = {
         overall_recovery: summary.overallRecoveryPct || "100%",
         recovered_muscles: summary.recoveredMuscles || "18/18",
         recovering_muscles: summary.recoveringMuscles ?? 0,
-        days_since_workout: summary.daysSinceLastWorkout ?? 245,
-        muscles: fullMusclesMap
+        days_since_workout: summary.daysSinceLastWorkout ?? 0,
+        muscles: fullMusclesMap,
+
+        streak_days: summary.currentStreak ?? 0,
+        lifetime_workouts: summary.lifetimeWorkouts ?? 0,
+        last_workout: summary.lastWorkoutName
+          ? { name: summary.lastWorkoutName, date: summary.lastWorkoutDate ?? null }
+          : null,
+
+        week_days_trained: week.daysTrained ?? 0,
+        week_workouts: week.totalWorkouts ?? 0,
+        week_duration: week.totalDuration ?? "0m",
+        week_volume_kg: week.totalVolumeKg ?? 0,
+        week_sets: week.totalSets ?? 0,
+        week_reps: week.totalReps ?? 0,
+        week_calories: week.totalCalories ?? 0,
+        week_days: (week.days || []).map(d => ({
+          weekday: d.weekday,
+          date: d.date,
+          trained: Boolean(d.trained),
+          minutes: d.minutes ?? 0,
+          volume_kg: d.tvl ?? 0
+        })),
+
+        leaderboard_rank: ov.leaderboardRank ?? null,
+
+        muscle_groups: (motraPayload.muscleGroupStats || []).map(g => ({
+          group: g.group,
+          reps: g.reps ?? 0,
+          sets: g.sets ?? 0,
+          volume_kg: g.volumeKg ?? 0
+        })),
+
+        // keep the e-paper payload small: 3 most recent workouts
+        recent_workouts: (motraPayload.recentWorkouts || []).slice(0, 3).map(w => ({
+          name: w.name,
+          date: w.date,
+          duration: w.duration,
+          volume_kg: w.volumeKg ?? 0,
+          calories: w.calories ?? 0,
+          primary_muscles: w.primaryMuscles || [],
+          pr_count: w.prCount ?? 0
+        }))
       };
     }
 

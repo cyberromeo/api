@@ -21,4 +21,8 @@ build/
 opencode_page.html
 t1.json
 .motra_refresh_token
+.motra_refresh_token.*
 *.har
+
+# HAR analysis scratch output (contains live tokens + API responses)
+.har_dump/
