@@ -3,10 +3,14 @@
  * GET /api/motra
  *
  * Returns muscle recovery for all 18 muscles PLUS weekly stats, workout
- * history, per-muscle-group volume, streak, leaderboard rank and PRs.
+ * history with per-exercise set logs, per-muscle-group volume, streak,
+ * leaderboard rank and PRs.
  *
  * Query params:
- *   ?section=weekly|workouts|muscles|overall|groups   return just one section
+ *   ?section=weekly|workouts|muscles|overall|groups|exercises
+ *       return just one section ("exercises" = set-by-set log per workout)
+ *   ?workout=<workoutID>
+ *       return one workout with its full exercise log
  */
 
 import { getDb } from './_firebase.js';
@@ -173,6 +177,7 @@ export default async function handler(req, res) {
           minutes: w.minutes ?? 0,
           calories: w.calories ?? 0,
           volume_kg: w.volumeKg ?? 0,
+          sets: w.sets ?? null,
           primary_muscles: w.primaryMuscles || [],
           secondary_muscles: w.secondaryMuscles || [],
           pr_count: w.prCount ?? 0,
@@ -180,6 +185,30 @@ export default async function handler(req, res) {
             exercise: pr.exercise,
             type: pr.type,
             weight_kg: pr.weightKg ?? null,
+          })),
+          // per-exercise log: what was actually done, set by set
+          exercises: (w.exercises || []).map((ex) => ({
+            exercise: ex.exercise,
+            exercise_id: ex.exerciseID,
+            category: ex.category,
+            segment: ex.segment,
+            primary_muscles: ex.primaryMuscles || [],
+            secondary_muscles: ex.secondaryMuscles || [],
+            set_count: ex.setCount ?? 0,
+            warmup_sets: ex.warmupSets ?? 0,
+            total_reps: ex.totalReps ?? 0,
+            top_weight_kg: ex.topWeightKg ?? 0,
+            volume_kg: ex.volumeKg ?? 0,
+            summary: ex.summary || '',
+            sets: (ex.sets || []).map((s) => ({
+              set: s.index,
+              phase: s.phase,
+              reps: s.reps ?? 0,
+              weight_kg: s.weightKg ?? 0,
+              unit: s.unit || 'kg',
+              seconds: s.seconds ?? null,
+              rest_seconds: s.restSeconds ?? null,
+            })),
           })),
         })),
 
@@ -202,6 +231,21 @@ export default async function handler(req, res) {
       };
     }
 
+    // single workout by id, with its full exercise log
+    const wantWorkout = req.query?.workout;
+    if (wantWorkout) {
+      const found = (data.recent_workouts || []).find((w) => w.id === wantWorkout);
+      if (!found) {
+        return res.status(404).json({
+          status: 'error',
+          message: `workout ${wantWorkout} not in the ${(data.recent_workouts || []).length} most recent`,
+        });
+      }
+      return res.status(200).json({
+        status: 'success', widget: 'motra', workout: wantWorkout, data: found,
+      });
+    }
+
     // optional single-section response
     const sectionMap = {
       weekly: 'weekly',
@@ -211,6 +255,24 @@ export default async function handler(req, res) {
       groups: 'muscle_groups',
     };
     const section = req.query?.section;
+
+    // flat exercise log across recent workouts
+    if (section === 'exercises') {
+      return res.status(200).json({
+        status: 'success',
+        widget: 'motra',
+        section: 'exercises',
+        data: (data.recent_workouts || []).map((w) => ({
+          id: w.id,
+          name: w.name,
+          date: w.date,
+          duration: w.duration,
+          volume_kg: w.volume_kg,
+          exercises: w.exercises,
+        })),
+      });
+    }
+
     if (section && sectionMap[section]) {
       return res.status(200).json({
         status: 'success',

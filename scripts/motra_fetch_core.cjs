@@ -89,6 +89,112 @@ function fmtHrsMins(totalSeconds) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/** Run an array of thunks at most `limit` at a time, preserving order. */
+async function pooled(jobs, limit) {
+  const out = new Array(jobs.length);
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      const i = next++;
+      if (i >= jobs.length) return;
+      out[i] = await jobs[i]();
+    }
+  }
+  const workers = [];
+  for (let i = 0; i < Math.min(limit || 4, jobs.length); i++) workers.push(worker());
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * Condense a set list into one readable line:
+ *   uniform      -> "3 × 10 @ 40kg"   (or "3 × 10" for bodyweight)
+ *   mixed        -> "12 @ 40kg, 10 @ 40kg, 8 @ 35kg"
+ * Warmup sets are excluded — they're kept in `sets` but don't define the line.
+ */
+function fmtSetSummary(sets) {
+  const work = sets.filter((s) => s.phase !== 'warmup');
+  const use = work.length ? work : sets;
+  if (!use.length) return '';
+
+  const w = (s) => (s.weightKg ? ` @ ${s.weightKg}${s.unit || 'kg'}` : '');
+  const sameReps = use.every((s) => s.reps === use[0].reps);
+  const sameWeight = use.every((s) => s.weightKg === use[0].weightKg);
+
+  if (sameReps && sameWeight) {
+    return `${use.length} × ${use[0].reps}${w(use[0])}`;
+  }
+  return use.map((s) => `${s.reps}${w(s)}`).join(', ');
+}
+
+/**
+ * Flatten one /workout/{id}/details response into an ordered exercise list,
+ * each with its individual sets (reps, weight, rest, warmup/working phase).
+ */
+function buildExerciseLog(details) {
+  const w = (details && details.workout) || {};
+  const setMap = w.setMap || {};
+  const exDetails = w.exerciseDetails || {};
+  const custom = w.customExerciseData || {};
+  const backend = w.backendExercises || {};
+  const out = [];
+
+  for (const act of w.activities || []) {
+    const blocks = (act.strengthExercise && act.strengthExercise.exercises) || [];
+    for (const block of blocks) {
+      const ids = block.setIDs || [];
+      const rawSets = ids.map((id) => setMap[id]).filter(Boolean);
+      if (!rawSets.length) continue;
+
+      const typeID = rawSets[0].exerciseTypeID || '';
+      const meta = exDetails[typeID] || custom[typeID] || backend[typeID] || {};
+
+      // keep the order the app logged them in
+      rawSets.sort((a, b) => (a.loggedAt || 0) - (b.loggedAt || 0));
+
+      let totalReps = 0;
+      let volumeKg = 0;
+      let topWeightKg = 0;
+      const sets = rawSets.map((s, i) => {
+        const ms = s.measurements || {};
+        const kg = ms.weight ? round(ms.weight.value, 1) : 0;
+        const reps = ms.reps != null ? ms.reps : 0;
+        if (s.phase !== 'warmup') {
+          totalReps += reps;
+          volumeKg += kg * reps;
+          if (kg > topWeightKg) topWeightKg = kg;
+        }
+        return {
+          index: i + 1,
+          phase: s.phase || 'main',
+          reps: reps,
+          weightKg: kg,
+          unit: (ms.weight && ms.weight.unit) || 'kg',
+          seconds: ms.time != null ? round(ms.time, 1) : null,
+          restSeconds: s.restTime != null ? Math.round(s.restTime) : null,
+        };
+      });
+
+      out.push({
+        exercise: meta.name || typeID || 'Exercise',
+        exerciseID: typeID,
+        segment: act.segment || 'main',
+        category: meta.category || '',
+        primaryMuscles: meta.primaryMuscleGroups || [],
+        secondaryMuscles: meta.secondaryMuscleGroups || [],
+        setCount: sets.filter((s) => s.phase !== 'warmup').length,
+        warmupSets: sets.filter((s) => s.phase === 'warmup').length,
+        totalReps: totalReps,
+        topWeightKg: topWeightKg,
+        volumeKg: round(volumeKg, 0),
+        summary: fmtSetSummary(sets),
+        sets: sets,
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * Fetch every gym endpoint and fold them into one flat payload.
  * Returns the payload object ready to be written to Firestore.
@@ -113,6 +219,19 @@ async function fetchAllGymData(idToken, nowMs) {
       getJson(idToken, `/user/${UID}/workouts/v2/?size=20`, 'workouts-list'),
       getJson(idToken, '/user/workout/count', 'workout-count'),
     ]);
+
+  // ---- per-workout exercise logs from /workout/{id}/details
+  //      (only for workouts that made it into the recent list)
+  const wids = ((workouts && workouts.items) || []).map((w) => w.workoutID).filter(Boolean);
+  const details = await pooled(
+    wids.map((id) => async () => {
+      const d = await getJson(idToken, `/workout/${id}/details`, `workout-details:${id.slice(0, 8)}`);
+      return d ? { workoutID: id, detail: d } : null;
+    }),
+    4
+  );
+  const detailsOk = details.filter(Boolean).length;
+  console.log(`   ℹ️  fetched ${detailsOk}/${wids.length} workout details`);
 
   // ---- muscles: prefer weekly-summary (it carries workoutDays), fall back to recovery
   const muscleStats =
@@ -237,8 +356,21 @@ async function fetchAllGymData(idToken, nowMs) {
       format: w.workoutFormat || '',
       prCount: prs.length,
       personalRecords: prs,
+      // exercise-level log attached below once /workout/{id}/details resolves
+      exercises: null,
     };
   });
+
+  // attach per-exercise set logs by workoutID
+  const detailById = new Map(details.filter(Boolean).map((d) => [d.workoutID, d.detail]));
+  for (const w of recentWorkouts) {
+    const det = detailById.get(w.workoutID);
+    if (det) {
+      w.exercises = buildExerciseLog(det);
+      const meta = det.metadata || {};
+      w.sets = meta.numberOfSets != null ? meta.numberOfSets : null;
+    }
+  }
 
   // ---- calendar: flatten date -> [workouts] into a sorted list of trained dates
   const cal = calendar || {};
@@ -300,6 +432,7 @@ async function fetchAllGymData(idToken, nowMs) {
         calendar && 'calendar-workouts',
         workouts && 'workouts-list',
         count && 'workout-count',
+        detailsOk && `workout-details(${detailsOk}/${wids.length})`,
       ].filter(Boolean),
       endpointsFailed: [
         !weekly && 'weekly-summary',
@@ -331,6 +464,14 @@ function logPayloadSummary(p) {
   console.log(`   rank          #${p.overallStats.leaderboardRank != null ? p.overallStats.leaderboardRank : '?'}` +
     (p.overallStats.leaderboardDelta ? ` (${p.overallStats.leaderboardDelta > 0 ? '+' : ''}${p.overallStats.leaderboardDelta})` : ''));
   console.log(`   workouts kept ${p.recentWorkouts.length} recent, ${p.workoutDates.length} dates in last 30d`);
+
+  const last = p.recentWorkouts[0];
+  if (last && last.exercises && last.exercises.length) {
+    console.log(`   last workout log — ${last.name}`);
+    for (const ex of last.exercises) {
+      console.log(`      ${ex.exercise.padEnd(32)} ${ex.summary}${ex.volumeKg ? `   (${ex.volumeKg}kg)` : ''}`);
+    }
+  }
 }
 
 module.exports = {
@@ -343,6 +484,9 @@ module.exports = {
   weekStartUnix,
   round,
   fmtHrsMins,
+  pooled,
+  fmtSetSummary,
+  buildExerciseLog,
   fetchAllGymData,
   logPayloadSummary,
 };
