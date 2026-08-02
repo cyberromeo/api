@@ -9,19 +9,7 @@
  *   ?section=weekly|workouts|muscles|overall|groups   return just one section
  */
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-if (!getApps().length) {
-  try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}');
-    if (serviceAccount.project_id) {
-      initializeApp({ credential: cert(serviceAccount) });
-    }
-  } catch (err) {
-    console.error('Firebase Admin init error:', err);
-  }
-}
+import { getDb } from './_firebase.js';
 
 const ALL_MUSCLES = [
   'abductors', 'abs', 'adductors', 'biceps', 'calves', 'chest',
@@ -95,125 +83,123 @@ export default async function handler(req, res) {
       sync: { endpoints_ok: [], endpoints_failed: [], last_updated: null },
     };
 
-    if (getApps().length) {
-      const db = getFirestore();
-      const docSnap = await db.collection('api_feeds').doc('motra_metrics').get();
+    const db = getDb();
+    const docSnap = await db.collection('api_feeds').doc('motra_metrics').get();
 
-      if (docSnap.exists) {
-        const doc = docSnap.data();
-        const p = doc.payload || {};
-        const summary = p.summary || {};
+    if (docSnap.exists) {
+      const doc = docSnap.data();
+      const p = doc.payload || {};
+      const summary = p.summary || {};
 
-        // merge stored muscles over the full 18 so none ever go missing
-        const muscles = defaultMuscles();
-        for (const [key, m] of Object.entries(p.musclesMap || {})) {
-          if (!m) continue;
-          muscles[key] = {
-            recovery: m.recovery ?? 100,
-            daysToRecovery: m.daysToRecovery ?? 0,
-            daysSinceLastUsed: m.daysSinceLastUsed ?? null,
-            workoutDays: Array.isArray(m.workoutDays) ? m.workoutDays : [],
-          };
-        }
-
-        const week = p.weeklyStats || {};
-        const ov = p.overallStats || {};
-
-        data = {
-          overall_recovery: summary.overallRecoveryPct || '100%',
-          recovered_muscles: summary.recoveredMuscles || `${ALL_MUSCLES.length}/${ALL_MUSCLES.length}`,
-          recovering_muscles: summary.recoveringMuscles ?? 0,
-          days_since_workout: summary.daysSinceLastWorkout ?? 0,
-          muscles,
-          updated_at: doc.timestamp?.toDate
-            ? doc.timestamp.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-            : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-
-          streak: {
-            current_days: summary.currentStreak ?? 0,
-            minutes: summary.streakWorkoutMinutes ?? 0,
-            minutes_goal: summary.streakWorkoutMinutesMax ?? 0,
-          },
-          lifetime: {
-            workouts: summary.lifetimeWorkouts ?? 0,
-            train_workouts: summary.trainWorkouts ?? 0,
-            external_workouts: summary.externalWorkouts ?? 0,
-          },
-          last_workout: {
-            name: summary.lastWorkoutName ?? null,
-            date: summary.lastWorkoutDate ?? null,
-          },
-
-          weekly: {
-            week_start: week.weekStartDate ?? null,
-            days_trained: week.daysTrained ?? 0,
-            total_workouts: week.totalWorkouts ?? 0,
-            total_minutes: week.totalMinutes ?? 0,
-            total_duration: week.totalDuration ?? '0m',
-            total_calories: week.totalCalories ?? 0,
-            total_sets: week.totalSets ?? 0,
-            total_reps: week.totalReps ?? 0,
-            total_volume_kg: week.totalVolumeKg ?? 0,
-            days: Array.isArray(week.days) && week.days.length ? week.days : emptyWeek().days,
-          },
-
-          overall: {
-            lifetime_workouts: ov.lifetimeWorkouts ?? 0,
-            period_workouts: ov.periodWorkouts ?? 0,
-            period_reps: ov.periodReps ?? 0,
-            period_sets: ov.periodSets ?? 0,
-            period_volume_kg: ov.periodVolumeKg ?? 0,
-            period_calories: ov.periodCalories ?? 0,
-            period_minutes: ov.periodMinutes ?? 0,
-            leaderboard_rank: ov.leaderboardRank ?? null,
-            leaderboard_prev_rank: ov.leaderboardPrevRank ?? null,
-            leaderboard_delta: ov.leaderboardDelta ?? null,
-            top_exercises: ov.topExercises || [],
-          },
-
-          muscle_groups: (p.muscleGroupStats || []).map((g) => ({
-            group: g.group,
-            reps: g.reps ?? 0,
-            sets: g.sets ?? 0,
-            volume_kg: g.volumeKg ?? 0,
-          })),
-
-          recent_workouts: (p.recentWorkouts || []).map((w) => ({
-            id: w.workoutID,
-            name: w.name,
-            date: w.date,
-            duration: w.duration,
-            minutes: w.minutes ?? 0,
-            calories: w.calories ?? 0,
-            volume_kg: w.volumeKg ?? 0,
-            primary_muscles: w.primaryMuscles || [],
-            secondary_muscles: w.secondaryMuscles || [],
-            pr_count: w.prCount ?? 0,
-            personal_records: (w.personalRecords || []).map((pr) => ({
-              exercise: pr.exercise,
-              type: pr.type,
-              weight_kg: pr.weightKg ?? null,
-            })),
-          })),
-
-          workout_dates: p.workoutDates || [],
-
-          // convenience: only the muscles still recovering, worst first
-          muscles_needing_recovery: (p.musclesList || [])
-            .filter((m) => (m.recovery ?? 100) < 100)
-            .map((m) => ({
-              muscle: m.muscle,
-              recovery: m.recovery,
-              days_to_recovery: m.daysToRecovery ?? 0,
-            })),
-
-          sync: {
-            endpoints_ok: p.meta?.endpointsOk || [],
-            endpoints_failed: p.meta?.endpointsFailed || [],
-            last_updated: p.lastUpdated ?? null,
-          },
+      // merge stored muscles over the full 18 so none ever go missing
+      const muscles = defaultMuscles();
+      for (const [key, m] of Object.entries(p.musclesMap || {})) {
+        if (!m) continue;
+        muscles[key] = {
+          recovery: m.recovery ?? 100,
+          daysToRecovery: m.daysToRecovery ?? 0,
+          daysSinceLastUsed: m.daysSinceLastUsed ?? null,
+          workoutDays: Array.isArray(m.workoutDays) ? m.workoutDays : [],
         };
       }
+
+      const week = p.weeklyStats || {};
+      const ov = p.overallStats || {};
+
+      data = {
+        overall_recovery: summary.overallRecoveryPct || '100%',
+        recovered_muscles: summary.recoveredMuscles || `${ALL_MUSCLES.length}/${ALL_MUSCLES.length}`,
+        recovering_muscles: summary.recoveringMuscles ?? 0,
+        days_since_workout: summary.daysSinceLastWorkout ?? 0,
+        muscles,
+        updated_at: doc.timestamp?.toDate
+          ? doc.timestamp.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+
+        streak: {
+          current_days: summary.currentStreak ?? 0,
+          minutes: summary.streakWorkoutMinutes ?? 0,
+          minutes_goal: summary.streakWorkoutMinutesMax ?? 0,
+        },
+        lifetime: {
+          workouts: summary.lifetimeWorkouts ?? 0,
+          train_workouts: summary.trainWorkouts ?? 0,
+          external_workouts: summary.externalWorkouts ?? 0,
+        },
+        last_workout: {
+          name: summary.lastWorkoutName ?? null,
+          date: summary.lastWorkoutDate ?? null,
+        },
+
+        weekly: {
+          week_start: week.weekStartDate ?? null,
+          days_trained: week.daysTrained ?? 0,
+          total_workouts: week.totalWorkouts ?? 0,
+          total_minutes: week.totalMinutes ?? 0,
+          total_duration: week.totalDuration ?? '0m',
+          total_calories: week.totalCalories ?? 0,
+          total_sets: week.totalSets ?? 0,
+          total_reps: week.totalReps ?? 0,
+          total_volume_kg: week.totalVolumeKg ?? 0,
+          days: Array.isArray(week.days) && week.days.length ? week.days : emptyWeek().days,
+        },
+
+        overall: {
+          lifetime_workouts: ov.lifetimeWorkouts ?? 0,
+          period_workouts: ov.periodWorkouts ?? 0,
+          period_reps: ov.periodReps ?? 0,
+          period_sets: ov.periodSets ?? 0,
+          period_volume_kg: ov.periodVolumeKg ?? 0,
+          period_calories: ov.periodCalories ?? 0,
+          period_minutes: ov.periodMinutes ?? 0,
+          leaderboard_rank: ov.leaderboardRank ?? null,
+          leaderboard_prev_rank: ov.leaderboardPrevRank ?? null,
+          leaderboard_delta: ov.leaderboardDelta ?? null,
+          top_exercises: ov.topExercises || [],
+        },
+
+        muscle_groups: (p.muscleGroupStats || []).map((g) => ({
+          group: g.group,
+          reps: g.reps ?? 0,
+          sets: g.sets ?? 0,
+          volume_kg: g.volumeKg ?? 0,
+        })),
+
+        recent_workouts: (p.recentWorkouts || []).map((w) => ({
+          id: w.workoutID,
+          name: w.name,
+          date: w.date,
+          duration: w.duration,
+          minutes: w.minutes ?? 0,
+          calories: w.calories ?? 0,
+          volume_kg: w.volumeKg ?? 0,
+          primary_muscles: w.primaryMuscles || [],
+          secondary_muscles: w.secondaryMuscles || [],
+          pr_count: w.prCount ?? 0,
+          personal_records: (w.personalRecords || []).map((pr) => ({
+            exercise: pr.exercise,
+            type: pr.type,
+            weight_kg: pr.weightKg ?? null,
+          })),
+        })),
+
+        workout_dates: p.workoutDates || [],
+
+        // convenience: only the muscles still recovering, worst first
+        muscles_needing_recovery: (p.musclesList || [])
+          .filter((m) => (m.recovery ?? 100) < 100)
+          .map((m) => ({
+            muscle: m.muscle,
+            recovery: m.recovery,
+            days_to_recovery: m.daysToRecovery ?? 0,
+          })),
+
+        sync: {
+          endpoints_ok: p.meta?.endpointsOk || [],
+          endpoints_failed: p.meta?.endpointsFailed || [],
+          last_updated: p.lastUpdated ?? null,
+        },
+      };
     }
 
     // optional single-section response
