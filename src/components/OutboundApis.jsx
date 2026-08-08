@@ -3,6 +3,34 @@ import { ArrowUpRight, Monitor, ExternalLink, Copy, Check, Sparkles } from 'luci
 
 const OUTBOUND_ENDPOINTS = [
   {
+    name: 'GET /api/study',
+    badge: 'STUDY PROGRESS API',
+    description: 'Returns only study telemetry: today\u2019s study hours vs the 11 hrs daily goal, PYQ hours vs the 2 hrs goal, and MedX tracker completion (0/121 with completion percentage).',
+    consumer: 'E-Paper Display / Study App / Widgets',
+    responseExample: `{
+  "status": "success",
+  "widget": "study",
+  "data": {
+    "study_hours": "0.00",
+    "study_goal": "11 hrs",
+    "study_progress": "0.00/11 hrs",
+    "study_percentage": "0.0%",
+    "pyq_hours": "0.00",
+    "pyq_goal": "2 hrs",
+    "pyq_progress": "0.00/2 hrs",
+    "pyq_percentage": "0.0%",
+    "medx_tracker": {
+      "completion_percentage": "0.0%",
+      "items_progress": "0/121",
+      "completed_items": 0,
+      "total_items": 121
+    },
+    "streak_days": 0,
+    "updated_at": "2026-08-08T12:00:00.000Z"
+  }
+}`
+  },
+  {
     name: 'GET /api/dash',
     badge: 'PRIMARY E-PAPER ENDPOINT',
     description: 'Universal aggregated payload containing class schedule, next exam, AC power, AI usage, Todoist, MedX tracker/study time, Motra 18 muscles, and Question of the Day.',
